@@ -9,7 +9,7 @@ import (
 
 type Config struct {
 	DatabaseURL string
-	JWT_SECRET  string
+	JWTSecret   string
 }
 
 func LoadConfig() Config {
@@ -19,7 +19,7 @@ func LoadConfig() Config {
 	}
 	return Config{
 		DatabaseURL: getEnv("DATABASE_URL"),
-		JWT_SECRET:  getEnv("JWT_SECRET"),
+		JWTSecret:   getEnv("JWT_SECRET"),
 	}
 }
 
