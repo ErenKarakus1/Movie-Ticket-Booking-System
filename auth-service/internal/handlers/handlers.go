@@ -24,7 +24,7 @@ func RegisterHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		user, err := services.CreateUser(ctx.Request.Context(), pool, req)
+		registerResponse, err := services.CreateUser(ctx.Request.Context(), pool, req)
 		if err != nil {
 			if errors.Is(err, repository.ErrEmailAlreadyRegistered) {
 				ctx.JSON(http.StatusConflict, gin.H{"error": "email is already registered"})
@@ -33,6 +33,33 @@ func RegisterHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 			return
 		}
-		ctx.JSON(http.StatusCreated, user)
+		ctx.JSON(http.StatusCreated, registerResponse)
+	}
+}
+
+func LoginHandler(pool *pgxpool.Pool, jwtSecret string) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		var req models.LoginRequest
+		if err := ctx.ShouldBindJSON(&req); err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+			return
+		}
+		req.Normalize()
+		if err := validations.ValidateLoginRequest(req); err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		loginResponse, err := services.LoginUser(ctx.Request.Context(), pool, jwtSecret, req)
+		if err != nil {
+			if errors.Is(err, repository.ErrUserNotFound) {
+				ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid email or password"})
+				return
+			}
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+
+		ctx.JSON(http.StatusOK, loginResponse)
 	}
 }

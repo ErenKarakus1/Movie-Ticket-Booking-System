@@ -34,3 +34,16 @@ func (r *RegisterRequest) Normalize() {
 	r.Name = strings.TrimSpace(r.Name)
 	r.Email = strings.ToLower(strings.TrimSpace(r.Email))
 }
+
+type LoginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type LoginResponse struct {
+	Token string `json:"token"`
+}
+
+func (r *LoginRequest) Normalize() {
+	r.Email = strings.ToLower(strings.TrimSpace(r.Email))
+}

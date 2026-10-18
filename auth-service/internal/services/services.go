@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/mail"
 
+	"github.com/ErenKarakus1/Movie-Ticket-Booking-System/auth-service/internal/jwt"
 	"github.com/ErenKarakus1/Movie-Ticket-Booking-System/auth-service/internal/models"
 	"github.com/ErenKarakus1/Movie-Ticket-Booking-System/auth-service/internal/password"
 	"github.com/ErenKarakus1/Movie-Ticket-Booking-System/auth-service/internal/repository"
@@ -41,4 +42,33 @@ func CreateUser(ctx context.Context, pool *pgxpool.Pool, req models.RegisterRequ
 	}
 
 	return insertedUser, nil
+}
+
+func LoginUser(ctx context.Context, pool *pgxpool.Pool, jwtSecret string, req models.LoginRequest) (models.LoginResponse, error) {
+
+	email, err := mail.ParseAddress(req.Email)
+	if err != nil {
+		return models.LoginResponse{}, errors.New("internal server error")
+	}
+
+	user, err := repository.GetUserByEmail(ctx, pool, email.Address)
+
+	if err != nil {
+		if errors.Is(err, repository.ErrUserNotFound) {
+			return models.LoginResponse{}, err
+		}
+		return models.LoginResponse{}, errors.New("internal server error")
+	}
+
+	passwordMatches := password.CompareHashAndPassword(user.PasswordHash, req.Password)
+	if !passwordMatches {
+		return models.LoginResponse{}, repository.ErrUserNotFound
+	}
+
+	token, err := jwt.GenerateToken(jwtSecret, user)
+	if err != nil {
+		return models.LoginResponse{}, errors.New("internal server error")
+	}
+
+	return models.LoginResponse{Token: token}, nil
 }

@@ -56,3 +56,20 @@ func ValidateRegisterRequest(r models.RegisterRequest) error {
 	return nil
 
 }
+
+func ValidateLoginRequest(r models.LoginRequest) error {
+	if r.Email == "" {
+		return errors.New("email is required")
+	}
+
+	_, err := mail.ParseAddress(r.Email)
+	if err != nil {
+		return errors.New("invalid email")
+	}
+
+	if r.Password == "" {
+		return errors.New("password is required")
+	}
+
+	return nil
+}
