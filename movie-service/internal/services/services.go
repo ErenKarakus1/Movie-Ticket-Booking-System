@@ -36,3 +36,15 @@ func CreateMovie(ctx context.Context, pool *pgxpool.Pool, req models.AddMovieReq
 	}
 	return insertedMovie, nil
 }
+
+func GetMovie(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID) (models.Movie, error) {
+	movie, err := repository.GetMovieByID(ctx, pool, id)
+	if err != nil {
+		if errors.Is(err, repository.ErrMovieNotFound) {
+			return models.Movie{}, err
+		}
+		return models.Movie{}, errors.New("internal server error")
+	}
+
+	return movie, nil
+}

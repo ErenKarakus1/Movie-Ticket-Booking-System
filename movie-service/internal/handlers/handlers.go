@@ -1,12 +1,15 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/ErenKarakus1/Movie-Ticket-Booking-System/movie-service/internal/models"
+	"github.com/ErenKarakus1/Movie-Ticket-Booking-System/movie-service/internal/repository"
 	"github.com/ErenKarakus1/Movie-Ticket-Booking-System/movie-service/internal/services"
 	"github.com/ErenKarakus1/Movie-Ticket-Booking-System/movie-service/internal/validations"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -28,5 +31,32 @@ func CreateMovieHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 		ctx.JSON(http.StatusCreated, movie)
+	}
+}
+
+func GetMovieHandler(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		id := ctx.Param("id")
+		if id == "" {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "movie id is required"})
+			return
+		}
+		parsedID, err := uuid.Parse(id)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid movie id"})
+			return
+		}
+
+		movie, err := services.GetMovie(ctx.Request.Context(), pool, parsedID)
+		if err != nil {
+			if errors.Is(err, repository.ErrMovieNotFound) {
+				ctx.JSON(http.StatusNotFound, gin.H{"error": "movie not found"})
+				return
+			}
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+
+		ctx.JSON(http.StatusOK, movie)
 	}
 }

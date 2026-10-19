@@ -22,6 +22,7 @@ func main() {
 	router := gin.Default()
 
 	router.POST("/movies", middlewares.AdminMiddleware(), handlers.CreateMovieHandler(pool))
+	router.GET("/movies/:id", handlers.GetMovieHandler(pool))
 
 	if err := router.Run(":8082"); err != nil {
 		log.Fatal(err)
