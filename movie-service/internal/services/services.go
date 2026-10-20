@@ -48,3 +48,11 @@ func GetMovie(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID) (models.Mov
 
 	return movie, nil
 }
+
+func GetAllMovies(ctx context.Context, pool *pgxpool.Pool) ([]models.Movie, error) {
+	movies, err := repository.GetAllMovies(ctx, pool)
+	if err != nil {
+		return []models.Movie{}, errors.New("internal server error")
+	}
+	return movies, nil
+}

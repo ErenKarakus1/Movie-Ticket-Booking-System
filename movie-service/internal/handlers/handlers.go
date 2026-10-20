@@ -60,3 +60,17 @@ func GetMovieHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 		ctx.JSON(http.StatusOK, movie)
 	}
 }
+
+func GetAllMoviesHandler(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		movies, err := services.GetAllMovies(ctx.Request.Context(), pool)
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+		if movies == nil {
+			movies = []models.Movie{}
+		}
+		ctx.JSON(http.StatusOK, movies)
+	}
+}
