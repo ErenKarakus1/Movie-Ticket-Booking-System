@@ -56,3 +56,15 @@ func GetAllMovies(ctx context.Context, pool *pgxpool.Pool) ([]models.Movie, erro
 	}
 	return movies, nil
 }
+
+func UpdateMovie(ctx context.Context, pool *pgxpool.Pool, req models.AddMovieRequest, id uuid.UUID) (models.Movie, error) {
+	updatedMovie, err := repository.UpdateMovie(ctx, pool, req, id)
+	if err != nil {
+		if errors.Is(err, repository.ErrMovieNotFound) {
+			return models.Movie{}, err
+		}
+		return models.Movie{}, errors.New("internal server error")
+	}
+
+	return updatedMovie, nil
+}

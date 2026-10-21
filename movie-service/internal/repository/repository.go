@@ -54,6 +54,23 @@ const getAllMoviesSQL = `
 	ORDER BY created_at DESC
 `
 
+const updateMovieSQL = `
+	UPDATE movies
+	SET 
+		title=$1,
+		description=$2,
+		duration_minutes=$3,
+		release_date=$4
+	WHERE id=$5
+	RETURNING
+		id,
+		title,
+		description,
+		duration_minutes,
+		release_date,
+		created_at
+`
+
 func InsertMovie(ctx context.Context, pool *pgxpool.Pool, movie models.Movie) (models.Movie, error) {
 	var insertedMovie models.Movie
 	err := pool.QueryRow(
@@ -136,4 +153,31 @@ func GetAllMovies(ctx context.Context, pool *pgxpool.Pool) ([]models.Movie, erro
 		return []models.Movie{}, errors.New("internal server error")
 	}
 	return movies, nil
+}
+
+func UpdateMovie(ctx context.Context, pool *pgxpool.Pool, req models.AddMovieRequest, id uuid.UUID) (models.Movie, error) {
+	var movie models.Movie
+	err := pool.QueryRow(
+		ctx,
+		updateMovieSQL,
+		req.Title,
+		req.Description,
+		req.DurationMinutes,
+		req.ReleaseDate,
+		id,
+	).Scan(
+		&movie.ID,
+		&movie.Title,
+		&movie.Description,
+		&movie.DurationMinutes,
+		&movie.ReleaseDate,
+		&movie.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.Movie{}, ErrMovieNotFound
+		}
+		return models.Movie{}, errors.New("internal server error")
+	}
+	return movie, nil
 }

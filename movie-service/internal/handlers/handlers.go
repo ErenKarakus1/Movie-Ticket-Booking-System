@@ -74,3 +74,39 @@ func GetAllMoviesHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 		ctx.JSON(http.StatusOK, movies)
 	}
 }
+
+func UpdateMovieHandler(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		id := ctx.Param("id")
+		if id == "" {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "movie id is required"})
+			return
+		}
+		parsedID, err := uuid.Parse(id)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid movie id"})
+			return
+		}
+		var req models.AddMovieRequest
+		if err := ctx.ShouldBindJSON(&req); err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+			return
+		}
+		req.Normalize()
+		if err := validations.ValidateAddMovieRequest(req); err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		updatedMovie, err := services.UpdateMovie(ctx.Request.Context(), pool, req, parsedID)
+		if err != nil {
+			if errors.Is(err, repository.ErrMovieNotFound) {
+				ctx.JSON(http.StatusNotFound, gin.H{"error": "movie not found"})
+				return
+			}
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+
+		ctx.JSON(http.StatusOK, updatedMovie)
+	}
+}
