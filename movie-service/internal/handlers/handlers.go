@@ -110,3 +110,24 @@ func UpdateMovieHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 		ctx.JSON(http.StatusOK, updatedMovie)
 	}
 }
+
+func CreateAuditoriumHandler(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		var req models.CreateAuditoriumRequest
+		if err := ctx.ShouldBindJSON(&req); err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+			return
+		}
+		req.Normalize()
+		if err := validations.ValidateCreateAuditoriumRequest(req); err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		auditorium, err := services.CreateAuditorium(ctx.Request.Context(), pool, req)
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+		ctx.JSON(http.StatusCreated, auditorium)
+	}
+}

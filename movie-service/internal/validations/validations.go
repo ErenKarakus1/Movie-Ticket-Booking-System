@@ -43,3 +43,17 @@ func ValidateAddMovieRequest(req models.AddMovieRequest) error {
 
 	return nil
 }
+
+func ValidateCreateAuditoriumRequest(r models.CreateAuditoriumRequest) error {
+	if r.Name == "" {
+		return errors.New("auditorium name is required")
+	}
+	nameLength := utf8.RuneCountInString(r.Name)
+	if nameLength < 3 {
+		return errors.New("auditorium name must be at least 3 characters")
+	}
+	if nameLength > 64 {
+		return errors.New("auditorium name must be at most 64 characters")
+	}
+	return nil
+}

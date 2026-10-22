@@ -27,3 +27,17 @@ func (r *AddMovieRequest) Normalize() {
 	r.Title = strings.TrimSpace(r.Title)
 	r.Description = strings.TrimSpace(r.Description)
 }
+
+type Auditorium struct {
+	ID        uuid.UUID `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type CreateAuditoriumRequest struct {
+	Name string `json:"name"`
+}
+
+func (r *CreateAuditoriumRequest) Normalize() {
+	r.Name = strings.TrimSpace(r.Name)
+}

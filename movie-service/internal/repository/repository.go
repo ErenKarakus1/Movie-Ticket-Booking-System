@@ -71,6 +71,18 @@ const updateMovieSQL = `
 		created_at
 `
 
+const insertAuditoriumSQL = `
+	INSERT INTO auditoriums (
+		id,
+		name
+	)
+	VALUES ($1,$2)
+	RETURNING
+		id,
+		name,
+		created_at
+`
+
 func InsertMovie(ctx context.Context, pool *pgxpool.Pool, movie models.Movie) (models.Movie, error) {
 	var insertedMovie models.Movie
 	err := pool.QueryRow(
@@ -180,4 +192,22 @@ func UpdateMovie(ctx context.Context, pool *pgxpool.Pool, req models.AddMovieReq
 		return models.Movie{}, errors.New("internal server error")
 	}
 	return movie, nil
+}
+
+func InsertAuditorium(ctx context.Context, pool *pgxpool.Pool, auditorium models.Auditorium) (models.Auditorium, error) {
+	var insertedAuditorium models.Auditorium
+	err := pool.QueryRow(
+		ctx,
+		insertAuditoriumSQL,
+		auditorium.ID,
+		auditorium.Name,
+	).Scan(
+		&insertedAuditorium.ID,
+		&insertedAuditorium.Name,
+		&insertedAuditorium.CreatedAt,
+	)
+	if err != nil {
+		return models.Auditorium{}, errors.New("internal server error")
+	}
+	return insertedAuditorium, nil
 }

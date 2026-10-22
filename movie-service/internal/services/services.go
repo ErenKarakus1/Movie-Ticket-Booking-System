@@ -68,3 +68,19 @@ func UpdateMovie(ctx context.Context, pool *pgxpool.Pool, req models.AddMovieReq
 
 	return updatedMovie, nil
 }
+
+func generateAuditoriumID(req models.CreateAuditoriumRequest) models.Auditorium {
+	return models.Auditorium{
+		ID:   uuid.New(),
+		Name: req.Name,
+	}
+}
+
+func CreateAuditorium(ctx context.Context, pool *pgxpool.Pool, req models.CreateAuditoriumRequest) (models.Auditorium, error) {
+	auditorium := generateAuditoriumID(req)
+	insertedAuditorium, err := repository.InsertAuditorium(ctx, pool, auditorium)
+	if err != nil {
+		return models.Auditorium{}, errors.New("internal server error")
+	}
+	return insertedAuditorium, nil
+}
