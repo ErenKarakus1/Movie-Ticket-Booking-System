@@ -41,3 +41,19 @@ type CreateAuditoriumRequest struct {
 func (r *CreateAuditoriumRequest) Normalize() {
 	r.Name = strings.TrimSpace(r.Name)
 }
+
+type Showtime struct {
+	ID           uuid.UUID `json:"id"`
+	MovieID      uuid.UUID `json:"movie_id"`
+	AuditoriumID uuid.UUID `json:"auditorium_id"`
+	StartsAt     time.Time `json:"starts_at"`
+	EndsAt       time.Time `json:"ends_at"`
+	PriceCents   int       `json:"price_cents"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+type AddShowtimeRequest struct {
+	AuditoriumID uuid.UUID `json:"auditorium_id"`
+	StartsAt     time.Time `json:"starts_at"`
+	PriceCents   int       `json:"price_cents"`
+}

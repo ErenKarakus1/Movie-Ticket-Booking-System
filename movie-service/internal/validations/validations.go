@@ -6,6 +6,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/ErenKarakus1/Movie-Ticket-Booking-System/movie-service/internal/models"
+	"github.com/google/uuid"
 )
 
 func ValidateAddMovieRequest(req models.AddMovieRequest) error {
@@ -54,6 +55,22 @@ func ValidateCreateAuditoriumRequest(r models.CreateAuditoriumRequest) error {
 	}
 	if nameLength > 64 {
 		return errors.New("auditorium name must be at most 64 characters")
+	}
+	return nil
+}
+
+func ValidateAddShowtimeRequest(req models.AddShowtimeRequest) error {
+	if req.PriceCents < 0 {
+		return errors.New("invalid price cents")
+	}
+	if req.AuditoriumID == uuid.Nil {
+		return errors.New("auditorium id is required")
+	}
+	if req.StartsAt.IsZero() {
+		return errors.New("start time is required")
+	}
+	if req.StartsAt.Before(time.Now()) {
+		return errors.New("start time must be a future time")
 	}
 	return nil
 }

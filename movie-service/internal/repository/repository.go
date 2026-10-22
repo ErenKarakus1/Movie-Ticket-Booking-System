@@ -11,6 +11,8 @@ import (
 )
 
 var ErrMovieNotFound = errors.New("movie not found")
+var ErrAuditoriumNotFound = errors.New("auditorium not found")
+var ErrOverlap = errors.New("showtime overlaps with another screening at the auditorium")
 
 const insertMovieSQL = `
 	INSERT INTO movies (
@@ -81,6 +83,52 @@ const insertAuditoriumSQL = `
 		id,
 		name,
 		created_at
+`
+
+const getAuditoriumByIDSQL = `
+	SELECT
+		id,
+		name,
+		created_at
+	FROM auditoriums
+	WHERE id=$1
+`
+
+const checkOverlapSQL = `
+	SELECT EXISTS (
+		SELECT 1
+		FROM showtimes
+		WHERE auditorium_id=$1
+		AND starts_at < $2  
+		AND ends_at > $3
+	)
+`
+
+const insertShowtimeSQL = `
+	INSERT INTO showtimes (
+		id,
+		movie_id,
+		auditorium_id,
+		starts_at,
+		ends_at,
+		price_cents
+	)
+	VALUES ($1,$2,$3,$4,$5,$6)
+	RETURNING
+		id,
+		movie_id,
+		auditorium_id,
+		starts_at,
+		ends_at,
+		price_cents,
+		created_at
+`
+
+const lockAuditoriumRowSQL = `
+	SELECT id
+	FROM auditoriums
+	WHERE id=$1
+	FOR UPDATE
 `
 
 func InsertMovie(ctx context.Context, pool *pgxpool.Pool, movie models.Movie) (models.Movie, error) {
@@ -210,4 +258,88 @@ func InsertAuditorium(ctx context.Context, pool *pgxpool.Pool, auditorium models
 		return models.Auditorium{}, errors.New("internal server error")
 	}
 	return insertedAuditorium, nil
+}
+
+func GetAuditoriumByID(ctx context.Context, pool *pgxpool.Pool, auditoriumID uuid.UUID) (models.Auditorium, error) {
+	var auditorium models.Auditorium
+	err := pool.QueryRow(
+		ctx,
+		getAuditoriumByIDSQL,
+		auditoriumID,
+	).Scan(
+		&auditorium.ID,
+		&auditorium.Name,
+		&auditorium.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.Auditorium{}, ErrAuditoriumNotFound
+		}
+		return models.Auditorium{}, errors.New("internal server error")
+	}
+	return auditorium, nil
+}
+
+func InsertShowtime(ctx context.Context, pool *pgxpool.Pool, showtime models.Showtime) (models.Showtime, error) {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return models.Showtime{}, errors.New("internal server error")
+	}
+	defer tx.Rollback(ctx)
+
+	var auditoriumID uuid.UUID
+	err = tx.QueryRow(
+		ctx,
+		lockAuditoriumRowSQL,
+		showtime.AuditoriumID,
+	).Scan(&auditoriumID)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.Showtime{}, ErrAuditoriumNotFound
+		}
+		return models.Showtime{}, errors.New("internal server error")
+	}
+
+	var overlaps bool
+	err = tx.QueryRow(
+		ctx,
+		checkOverlapSQL,
+		showtime.AuditoriumID,
+		showtime.EndsAt,
+		showtime.StartsAt,
+	).Scan(&overlaps)
+	if err != nil {
+		return models.Showtime{}, errors.New("internal server error")
+	}
+	if overlaps {
+		return models.Showtime{}, ErrOverlap
+	}
+	var insertedShowtime models.Showtime
+	err = tx.QueryRow(
+		ctx,
+		insertShowtimeSQL,
+		showtime.ID,
+		showtime.MovieID,
+		showtime.AuditoriumID,
+		showtime.StartsAt,
+		showtime.EndsAt,
+		showtime.PriceCents,
+	).Scan(
+		&insertedShowtime.ID,
+		&insertedShowtime.MovieID,
+		&insertedShowtime.AuditoriumID,
+		&insertedShowtime.StartsAt,
+		&insertedShowtime.EndsAt,
+		&insertedShowtime.PriceCents,
+		&insertedShowtime.CreatedAt,
+	)
+	if err != nil {
+		return models.Showtime{}, errors.New("internal server error")
+	}
+	err = tx.Commit(ctx)
+	if err != nil {
+		return models.Showtime{}, errors.New("internal server error")
+	}
+	return insertedShowtime, nil
 }

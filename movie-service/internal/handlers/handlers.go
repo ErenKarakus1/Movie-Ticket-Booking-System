@@ -131,3 +131,45 @@ func CreateAuditoriumHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 		ctx.JSON(http.StatusCreated, auditorium)
 	}
 }
+
+func AddShowtimeHandler(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		movieID := ctx.Param("id")
+		if movieID == "" {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "movie id is required"})
+			return
+		}
+		parsedMovieID, err := uuid.Parse(movieID)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid movie id"})
+			return
+		}
+		var req models.AddShowtimeRequest
+		if err := ctx.ShouldBindJSON(&req); err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+			return
+		}
+		if err := validations.ValidateAddShowtimeRequest(req); err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		showtime, err := services.AddShowtime(ctx.Request.Context(), pool, req, parsedMovieID)
+		if err != nil {
+			if errors.Is(err, repository.ErrAuditoriumNotFound) {
+				ctx.JSON(http.StatusNotFound, gin.H{"error": "auditorium not found"})
+				return
+			}
+			if errors.Is(err, repository.ErrMovieNotFound) {
+				ctx.JSON(http.StatusNotFound, gin.H{"error": "movie not found"})
+				return
+			}
+			if errors.Is(err, repository.ErrOverlap) {
+				ctx.JSON(http.StatusConflict, gin.H{"error": "showtime overlaps with another screening at the auditorium"})
+				return
+			}
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+		ctx.JSON(http.StatusCreated, showtime)
+	}
+}
