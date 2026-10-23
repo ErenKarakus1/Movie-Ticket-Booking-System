@@ -131,6 +131,21 @@ const lockAuditoriumRowSQL = `
 	FOR UPDATE
 `
 
+const getMovieShowtimesSQL = `
+	SELECT
+		id,
+		movie_id,
+		auditorium_id,
+		starts_at,
+		ends_at,
+		price_cents,
+		created_at
+	FROM showtimes
+	WHERE movie_id=$1
+	AND starts_at > NOW()
+	ORDER BY starts_at ASC
+`
+
 func InsertMovie(ctx context.Context, pool *pgxpool.Pool, movie models.Movie) (models.Movie, error) {
 	var insertedMovie models.Movie
 	err := pool.QueryRow(
@@ -342,4 +357,41 @@ func InsertShowtime(ctx context.Context, pool *pgxpool.Pool, showtime models.Sho
 		return models.Showtime{}, errors.New("internal server error")
 	}
 	return insertedShowtime, nil
+}
+
+func GetMovieShowtimes(ctx context.Context, pool *pgxpool.Pool, movieID uuid.UUID) ([]models.Showtime, error) {
+	rows, err := pool.Query(
+		ctx,
+		getMovieShowtimesSQL,
+		movieID,
+	)
+	if err != nil {
+		return []models.Showtime{}, errors.New("internal server error")
+	}
+	defer rows.Close()
+
+	var showtimes []models.Showtime
+	for rows.Next() {
+		var showtime models.Showtime
+		err := rows.Scan(
+			&showtime.ID,
+			&showtime.MovieID,
+			&showtime.AuditoriumID,
+			&showtime.StartsAt,
+			&showtime.EndsAt,
+			&showtime.PriceCents,
+			&showtime.CreatedAt,
+		)
+		if err != nil {
+			return []models.Showtime{}, errors.New("internal server error")
+		}
+
+		showtimes = append(showtimes, showtime)
+	}
+
+	if err := rows.Err(); err != nil {
+		return []models.Showtime{}, errors.New("internal server error")
+	}
+
+	return showtimes, nil
 }

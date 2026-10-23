@@ -27,6 +27,7 @@ func main() {
 	router.PUT("/movies/:id", middlewares.AdminMiddleware(), handlers.UpdateMovieHandler(pool))
 	router.POST("/auditoriums", middlewares.AdminMiddleware(), handlers.CreateAuditoriumHandler(pool))
 	router.POST("/movies/:id/showtimes", middlewares.AdminMiddleware(), handlers.AddShowtimeHandler(pool))
+	router.GET("/movies/:id/showtimes", handlers.GetMovieShowtimesHandler(pool))
 
 	if err := router.Run(":8082"); err != nil {
 		log.Fatal(err)

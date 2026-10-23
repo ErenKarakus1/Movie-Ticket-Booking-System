@@ -123,3 +123,19 @@ func AddShowtime(ctx context.Context, pool *pgxpool.Pool, req models.AddShowtime
 
 	return insertedShowtime, nil
 }
+
+func GetMovieShowtimes(ctx context.Context, pool *pgxpool.Pool, movieID uuid.UUID) ([]models.Showtime, error) {
+	_, err := repository.GetMovieByID(ctx, pool, movieID)
+	if err != nil {
+		if errors.Is(err, repository.ErrMovieNotFound) {
+			return []models.Showtime{}, err
+		}
+		return []models.Showtime{}, errors.New("internal server error")
+	}
+	showtimes, err := repository.GetMovieShowtimes(ctx, pool, movieID)
+	if err != nil {
+		return []models.Showtime{}, errors.New("internal server error")
+	}
+
+	return showtimes, nil
+}

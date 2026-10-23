@@ -173,3 +173,34 @@ func AddShowtimeHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 		ctx.JSON(http.StatusCreated, showtime)
 	}
 }
+
+func GetMovieShowtimesHandler(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		movieID := ctx.Param("id")
+		if movieID == "" {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "movie id is required"})
+			return
+		}
+		parsedMovieID, err := uuid.Parse(movieID)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid movie id"})
+			return
+		}
+
+		showtimes, err := services.GetMovieShowtimes(ctx.Request.Context(), pool, parsedMovieID)
+		if err != nil {
+			if errors.Is(err, repository.ErrMovieNotFound) {
+				ctx.JSON(http.StatusNotFound, gin.H{"error": "movie not found"})
+				return
+			}
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+
+		if showtimes == nil {
+			showtimes = []models.Showtime{}
+		}
+
+		ctx.JSON(http.StatusOK, showtimes)
+	}
+}
