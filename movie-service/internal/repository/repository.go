@@ -7,12 +7,14 @@ import (
 	"github.com/ErenKarakus1/Movie-Ticket-Booking-System/movie-service/internal/models"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var ErrMovieNotFound = errors.New("movie not found")
 var ErrAuditoriumNotFound = errors.New("auditorium not found")
 var ErrOverlap = errors.New("showtime overlaps with another screening at the auditorium")
+var ErrSeatExists = errors.New("seat already exists in auditorium")
 
 const insertMovieSQL = `
 	INSERT INTO movies (
@@ -144,6 +146,22 @@ const getMovieShowtimesSQL = `
 	WHERE movie_id=$1
 	AND starts_at > NOW()
 	ORDER BY starts_at ASC
+`
+
+const insertSeatSQL = `
+	INSERT INTO seats (
+		id,
+		auditorium_id,
+		row_label,
+		seat_number
+	)
+	VALUES ($1,$2,$3,$4)
+	RETURNING
+		id,
+		auditorium_id,
+		row_label,
+		seat_number,
+		created_at
 `
 
 func InsertMovie(ctx context.Context, pool *pgxpool.Pool, movie models.Movie) (models.Movie, error) {
@@ -394,4 +412,46 @@ func GetMovieShowtimes(ctx context.Context, pool *pgxpool.Pool, movieID uuid.UUI
 	}
 
 	return showtimes, nil
+}
+
+func InsertSeats(ctx context.Context, pool *pgxpool.Pool, seats []models.Seat) ([]models.Seat, error) {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return []models.Seat{}, errors.New("internal server error")
+	}
+	defer tx.Rollback(ctx)
+
+	var createdSeats []models.Seat
+
+	for _, seat := range seats {
+		var createdSeat models.Seat
+		err := tx.QueryRow(
+			ctx,
+			insertSeatSQL,
+			seat.ID,
+			seat.AuditoriumID,
+			seat.RowLabel,
+			seat.SeatNumber,
+		).Scan(
+			&createdSeat.ID,
+			&createdSeat.AuditoriumID,
+			&createdSeat.RowLabel,
+			&createdSeat.SeatNumber,
+			&createdSeat.CreatedAt,
+		)
+		if err != nil {
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+				return []models.Seat{}, ErrSeatExists
+			}
+			return []models.Seat{}, errors.New("internal server error")
+		}
+		createdSeats = append(createdSeats, createdSeat)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return []models.Seat{}, errors.New("internal server error")
+	}
+
+	return createdSeats, nil
 }

@@ -57,3 +57,23 @@ type AddShowtimeRequest struct {
 	StartsAt     time.Time `json:"starts_at"`
 	PriceCents   int       `json:"price_cents"`
 }
+
+type Seat struct {
+	ID           uuid.UUID `json:"id"`
+	AuditoriumID uuid.UUID `json:"auditorium_id"`
+	RowLabel     string    `json:"row_label"`
+	SeatNumber   int       `json:"seat_number"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+type CreateSeatRequest struct {
+	RowLabel   string `json:"row_label"`
+	SeatNumber int    `json:"seat_number"`
+}
+
+func NormalizeCreateSeatsRequest(req []CreateSeatRequest) []CreateSeatRequest {
+	for i := range req {
+		req[i].RowLabel = strings.TrimSpace(strings.ToUpper(req[i].RowLabel))
+	}
+	return req
+}

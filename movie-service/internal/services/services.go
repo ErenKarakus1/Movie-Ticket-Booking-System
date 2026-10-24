@@ -139,3 +139,36 @@ func GetMovieShowtimes(ctx context.Context, pool *pgxpool.Pool, movieID uuid.UUI
 
 	return showtimes, nil
 }
+
+func generateSeatWithID(auditoriumID uuid.UUID, req models.CreateSeatRequest) models.Seat {
+	return models.Seat{
+		ID:           uuid.New(),
+		AuditoriumID: auditoriumID,
+		RowLabel:     req.RowLabel,
+		SeatNumber:   req.SeatNumber,
+	}
+}
+
+func CreateSeats(ctx context.Context, pool *pgxpool.Pool, auditoriumID uuid.UUID, req []models.CreateSeatRequest) ([]models.Seat, error) {
+	_, err := repository.GetAuditoriumByID(ctx, pool, auditoriumID)
+	if err != nil {
+		if errors.Is(err, repository.ErrAuditoriumNotFound) {
+			return []models.Seat{}, err
+		}
+		return []models.Seat{}, errors.New("internal server error")
+	}
+
+	var seats []models.Seat
+	for _, seat := range req {
+		seatWithID := generateSeatWithID(auditoriumID, seat)
+		seats = append(seats, seatWithID)
+	}
+	createdSeats, err := repository.InsertSeats(ctx, pool, seats)
+	if err != nil {
+		if errors.Is(err, repository.ErrSeatExists) {
+			return []models.Seat{}, err
+		}
+		return []models.Seat{}, errors.New("internal server error")
+	}
+	return createdSeats, nil
+}

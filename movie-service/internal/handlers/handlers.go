@@ -204,3 +204,45 @@ func GetMovieShowtimesHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 		ctx.JSON(http.StatusOK, showtimes)
 	}
 }
+
+func CreateSeatsHandler(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		auditoriumID := ctx.Param("id")
+		if auditoriumID == "" {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "auditorium id is required"})
+			return
+		}
+		parsedAuditoriumID, err := uuid.Parse(auditoriumID)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid auditorium id"})
+			return
+		}
+
+		var req []models.CreateSeatRequest
+		if err := ctx.ShouldBindJSON(&req); err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+			return
+		}
+
+		req = models.NormalizeCreateSeatsRequest(req)
+		if err := validations.ValidateCreateSeatsRequest(req); err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		seats, err := services.CreateSeats(ctx.Request.Context(), pool, parsedAuditoriumID, req)
+		if err != nil {
+			if errors.Is(err, repository.ErrSeatExists) {
+				ctx.JSON(http.StatusConflict, gin.H{"error": "one or more seats are already exists in the auditorium"})
+				return
+			}
+			if errors.Is(err, repository.ErrAuditoriumNotFound) {
+				ctx.JSON(http.StatusNotFound, gin.H{"error": "auditorium not found"})
+				return
+			}
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+		ctx.JSON(http.StatusCreated, seats)
+	}
+}

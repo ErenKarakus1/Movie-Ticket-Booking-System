@@ -74,3 +74,40 @@ func ValidateAddShowtimeRequest(req models.AddShowtimeRequest) error {
 	}
 	return nil
 }
+
+type seatKey struct {
+	rowLabel   string
+	seatNumber int
+}
+
+func ValidateCreateSeatsRequest(req []models.CreateSeatRequest) error {
+	if len(req) == 0 {
+		return errors.New("at least one seat is required")
+	}
+	if len(req) > 500 {
+		return errors.New("at most 500 seats at a time is allowed")
+	}
+
+	seen := make(map[seatKey]struct{}, len(req))
+	for _, seat := range req {
+		if seat.RowLabel == "" {
+			return errors.New("all seats must have a row label")
+		}
+		if seat.SeatNumber <= 0 {
+			return errors.New("all seats must have a valid seat number")
+		}
+		charLen := utf8.RuneCountInString(seat.RowLabel)
+		if charLen > 128 {
+			return errors.New("all row labels must be at most 128 characters")
+		}
+		key := seatKey{
+			rowLabel:   seat.RowLabel,
+			seatNumber: seat.SeatNumber,
+		}
+		if _, exists := seen[key]; exists {
+			return errors.New("duplicate seat in request")
+		}
+		seen[key] = struct{}{}
+	}
+	return nil
+}
