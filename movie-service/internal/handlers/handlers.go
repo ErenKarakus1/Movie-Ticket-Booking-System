@@ -246,3 +246,33 @@ func CreateSeatsHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 		ctx.JSON(http.StatusCreated, seats)
 	}
 }
+
+func GetSeatsHandler(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		showtimeID := ctx.Param("id")
+		if showtimeID == "" {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "showtime id is required"})
+			return
+		}
+		parsedShowtimeID, err := uuid.Parse(showtimeID)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid showtime id"})
+			return
+		}
+
+		seats, err := services.GetSeats(ctx, pool, parsedShowtimeID)
+		if err != nil {
+			if errors.Is(err, repository.ErrShowtimeNotFound) {
+				ctx.JSON(http.StatusNotFound, gin.H{"error": "showtime not found"})
+				return
+			}
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+
+		if seats == nil {
+			seats = []models.Seat{}
+		}
+		ctx.JSON(http.StatusOK, seats)
+	}
+}

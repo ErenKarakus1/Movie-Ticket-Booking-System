@@ -15,6 +15,7 @@ var ErrMovieNotFound = errors.New("movie not found")
 var ErrAuditoriumNotFound = errors.New("auditorium not found")
 var ErrOverlap = errors.New("showtime overlaps with another screening at the auditorium")
 var ErrSeatExists = errors.New("seat already exists in auditorium")
+var ErrShowtimeNotFound = errors.New("showtime not found")
 
 const insertMovieSQL = `
 	INSERT INTO movies (
@@ -162,6 +163,31 @@ const insertSeatSQL = `
 		row_label,
 		seat_number,
 		created_at
+`
+
+const getShowtimeByIDSQL = `
+	SELECT
+		id,
+		movie_id,
+		auditorium_id,
+		starts_at,
+		ends_at,
+		price_cents,
+		created_at
+	FROM showtimes
+	WHERE id=$1
+`
+
+const getSeatsByAuditoriumIDSQL = `
+	SELECT
+		id,
+		auditorium_id,
+		row_label,
+		seat_number,
+		created_at
+	FROM seats
+	WHERE auditorium_id=$1
+	ORDER BY row_label, seat_number
 `
 
 func InsertMovie(ctx context.Context, pool *pgxpool.Pool, movie models.Movie) (models.Movie, error) {
@@ -454,4 +480,64 @@ func InsertSeats(ctx context.Context, pool *pgxpool.Pool, seats []models.Seat) (
 	}
 
 	return createdSeats, nil
+}
+
+func GetShowtimeByID(ctx context.Context, pool *pgxpool.Pool, showtimeID uuid.UUID) (models.Showtime, error) {
+	var showtime models.Showtime
+	err := pool.QueryRow(
+		ctx,
+		getShowtimeByIDSQL,
+		showtimeID,
+	).Scan(
+		&showtime.ID,
+		&showtime.MovieID,
+		&showtime.AuditoriumID,
+		&showtime.StartsAt,
+		&showtime.EndsAt,
+		&showtime.PriceCents,
+		&showtime.CreatedAt,
+	)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.Showtime{}, ErrShowtimeNotFound
+		}
+		return models.Showtime{}, errors.New("internal server error")
+	}
+
+	return showtime, nil
+}
+
+func GetSeatsByAuditoriumID(ctx context.Context, pool *pgxpool.Pool, auditoriumID uuid.UUID) ([]models.Seat, error) {
+	rows, err := pool.Query(
+		ctx,
+		getSeatsByAuditoriumIDSQL,
+		auditoriumID,
+	)
+	if err != nil {
+		return []models.Seat{}, errors.New("internal server error")
+	}
+	defer rows.Close()
+
+	var seats []models.Seat
+	for rows.Next() {
+		var seat models.Seat
+		err := rows.Scan(
+			&seat.ID,
+			&seat.AuditoriumID,
+			&seat.RowLabel,
+			&seat.SeatNumber,
+			&seat.CreatedAt,
+		)
+		if err != nil {
+			return []models.Seat{}, errors.New("internal server error")
+		}
+		seats = append(seats, seat)
+	}
+
+	if err := rows.Err(); err != nil {
+		return []models.Seat{}, errors.New("internal server error")
+	}
+
+	return seats, nil
 }

@@ -172,3 +172,19 @@ func CreateSeats(ctx context.Context, pool *pgxpool.Pool, auditoriumID uuid.UUID
 	}
 	return createdSeats, nil
 }
+
+func GetSeats(ctx context.Context, pool *pgxpool.Pool, showtimeID uuid.UUID) ([]models.Seat, error) {
+	showtime, err := repository.GetShowtimeByID(ctx, pool, showtimeID)
+	if err != nil {
+		if errors.Is(err, repository.ErrShowtimeNotFound) {
+			return []models.Seat{}, err
+		}
+		return []models.Seat{}, errors.New("internal server error")
+	}
+	seats, err := repository.GetSeatsByAuditoriumID(ctx, pool, showtime.AuditoriumID)
+	if err != nil {
+		return []models.Seat{}, errors.New("internal server error")
+	}
+
+	return seats, nil
+}
