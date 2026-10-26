@@ -28,6 +28,7 @@ func main() {
 	router.POST("/auditoriums", middlewares.AdminMiddleware(), handlers.CreateAuditoriumHandler(pool))
 	router.POST("/movies/:id/showtimes", middlewares.AdminMiddleware(), handlers.AddShowtimeHandler(pool))
 	router.GET("/movies/:id/showtimes", handlers.GetMovieShowtimesHandler(pool))
+	router.GET("/showtimes/:id", handlers.GetShowtimeHandler(pool))
 	router.POST("/auditoriums/:id/seats", middlewares.AdminMiddleware(), handlers.CreateSeatsHandler(pool))
 	router.GET("/showtimes/:id/seats", handlers.GetSeatsHandler(pool))
 

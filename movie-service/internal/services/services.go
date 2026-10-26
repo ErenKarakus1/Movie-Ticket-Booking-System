@@ -140,6 +140,17 @@ func GetMovieShowtimes(ctx context.Context, pool *pgxpool.Pool, movieID uuid.UUI
 	return showtimes, nil
 }
 
+func GetShowtime(ctx context.Context, pool *pgxpool.Pool, showtimeID uuid.UUID) (models.Showtime, error) {
+	showtime, err := repository.GetShowtimeByID(ctx, pool, showtimeID)
+	if err != nil {
+		if errors.Is(err, repository.ErrShowtimeNotFound) {
+			return models.Showtime{}, err
+		}
+		return models.Showtime{}, errors.New("internal server error")
+	}
+	return showtime, nil
+}
+
 func generateSeatWithID(auditoriumID uuid.UUID, req models.CreateSeatRequest) models.Seat {
 	return models.Seat{
 		ID:           uuid.New(),
