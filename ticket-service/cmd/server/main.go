@@ -25,6 +25,7 @@ func main() {
 
 	router := gin.Default()
 	router.POST("/showtimes/:id/holds", middlewares.UserMiddleware(), handlers.CreateHold(client, movies))
+	router.DELETE("/holds/:id", middlewares.UserMiddleware(), handlers.DeleteHoldHandler(client))
 
 	if err := router.Run(":8083"); err != nil {
 		log.Fatal(err)

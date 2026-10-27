@@ -15,6 +15,8 @@ import (
 var ErrSeatAlreadyHeld = errors.New("seat already held")
 var ErrSeatNotInShowtime = errors.New("seat does not belong to showtime auditorium")
 var ErrShowtimeStarted = errors.New("showtime has already started")
+var ErrHoldExpiredOrMissing = errors.New("hold is missing or expired")
+var ErrHoldDoesntBelongToUser = errors.New("hold belongs to another user")
 
 func CreateHold(ctx context.Context, client *redis.Client, movies *movieclient.Client, showtimeID uuid.UUID, seatIDs []uuid.UUID, userID uuid.UUID) (models.HoldDetails, error) {
 	showtime, err := movies.GetShowtime(ctx, showtimeID)
@@ -103,4 +105,53 @@ func CreateHold(ctx context.Context, client *redis.Client, movies *movieclient.C
 		SeatIDs:    seatIDs,
 		ExpiresAt:  expiresAt,
 	}, nil
+}
+
+func DeleteHold(ctx context.Context, client *redis.Client, holdID uuid.UUID, userID uuid.UUID) error {
+	const releaseHoldScript = `
+		local holdKey = KEYS[1]
+
+		if redis.call("EXISTS", holdKey) == 0 then
+			return 0
+		end
+
+		if redis.call("HGET", holdKey, "user_id") ~= ARGV[2] then
+			return -1
+		end
+
+		local fields = redis.call("HKEYS", holdKey)
+		for _, field in ipairs(fields) do
+			if string.sub(field, 1, 5) == "seat:" then
+				local seatKey = redis.call("HGET", holdKey, field)
+				if redis.call("GET", seatKey) == ARGV[1] then
+					redis.call("DEL", seatKey)
+				end
+			end
+		end
+
+		redis.call("DEL", holdKey)
+		return 1
+	`
+	result, err := client.Eval(
+		ctx,
+		releaseHoldScript,
+		[]string{"hold:" + holdID.String()},
+		holdID.String(),
+		userID.String(),
+	).Int()
+	if err != nil {
+		return errors.New("internal server error")
+	}
+
+	if result == 0 {
+		return ErrHoldExpiredOrMissing
+	}
+	if result == -1 {
+		return ErrHoldDoesntBelongToUser
+	}
+	if result == 1 {
+		return nil
+	}
+
+	return errors.New("internal server error")
 }

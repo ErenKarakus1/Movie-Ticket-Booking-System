@@ -77,3 +77,46 @@ func CreateHold(client *redis.Client, movies *movieclient.Client) gin.HandlerFun
 		ctx.JSON(http.StatusCreated, holdDetails)
 	}
 }
+
+func DeleteHoldHandler(client *redis.Client) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		userID := ctx.GetHeader("X-User-ID")
+		if userID == "" {
+			ctx.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
+
+		parsedUserID, err := uuid.Parse(userID)
+		if err != nil {
+			ctx.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
+
+		holdID := ctx.Param("id")
+		if holdID == "" {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "hold id is required"})
+			return
+		}
+		parsedHoldID, err := uuid.Parse(holdID)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid hold id"})
+			return
+		}
+
+		err = services.DeleteHold(ctx.Request.Context(), client, parsedHoldID, parsedUserID)
+		if err != nil {
+			if errors.Is(err, services.ErrHoldExpiredOrMissing) {
+				ctx.JSON(http.StatusNotFound, gin.H{"error": "hold expired or missing"})
+				return
+			}
+			if errors.Is(err, services.ErrHoldDoesntBelongToUser) {
+				ctx.JSON(http.StatusForbidden, gin.H{"error": "hold belongs to another user"})
+				return
+			}
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+
+		ctx.Status(http.StatusOK)
+	}
+}
