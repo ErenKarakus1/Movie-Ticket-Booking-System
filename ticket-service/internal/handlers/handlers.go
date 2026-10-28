@@ -10,6 +10,7 @@ import (
 	"github.com/ErenKarakus1/Movie-Ticket-Booking-System/ticket-service/internal/validations"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -118,5 +119,60 @@ func DeleteHoldHandler(client *redis.Client) gin.HandlerFunc {
 		}
 
 		ctx.Status(http.StatusOK)
+	}
+}
+
+func ConfirmHoldHandler(client *redis.Client, movies *movieclient.Client, pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		userID := ctx.GetHeader("X-User-ID")
+		if userID == "" {
+			ctx.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
+
+		parsedUserID, err := uuid.Parse(userID)
+		if err != nil {
+			ctx.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
+
+		holdID := ctx.Param("id")
+		if holdID == "" {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "hold id is required"})
+			return
+		}
+		parsedHoldID, err := uuid.Parse(holdID)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid hold id"})
+			return
+		}
+
+		booking, err := services.ConfirmHold(ctx.Request.Context(), client, movies, pool, parsedUserID, parsedHoldID)
+		if err != nil {
+			if errors.Is(err, services.ErrHoldExpiredOrMissing) {
+				ctx.JSON(http.StatusNotFound, gin.H{"error": "hold expired or missing"})
+				return
+			}
+			if errors.Is(err, services.ErrHoldDoesntBelongToUser) {
+				ctx.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+				return
+			}
+			if errors.Is(err, movieclient.ErrShowtimeNotFound) {
+				ctx.JSON(http.StatusNotFound, gin.H{"error": "showtime not found"})
+				return
+			}
+			if errors.Is(err, movieclient.ErrUnavailable) {
+				ctx.JSON(http.StatusServiceUnavailable, gin.H{"error": "movie service unavailable"})
+				return
+			}
+			if errors.Is(err, services.ErrSeatAlreadyBooked) {
+				ctx.JSON(http.StatusConflict, gin.H{"error": "one or more seats are already booked"})
+				return
+			}
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+
+		ctx.JSON(http.StatusCreated, booking)
 	}
 }

@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ErenKarakus1/Movie-Ticket-Booking-System/ticket-service/internal/models"
 	"github.com/ErenKarakus1/Movie-Ticket-Booking-System/ticket-service/internal/movieclient"
+	"github.com/ErenKarakus1/Movie-Ticket-Booking-System/ticket-service/internal/repository"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -17,6 +20,8 @@ var ErrSeatNotInShowtime = errors.New("seat does not belong to showtime auditori
 var ErrShowtimeStarted = errors.New("showtime has already started")
 var ErrHoldExpiredOrMissing = errors.New("hold is missing or expired")
 var ErrHoldDoesntBelongToUser = errors.New("hold belongs to another user")
+var ErrInvalidHoldDetails = errors.New("invalid hold details")
+var ErrSeatAlreadyBooked = repository.ErrSeatAlreadyBooked
 
 func CreateHold(ctx context.Context, client *redis.Client, movies *movieclient.Client, showtimeID uuid.UUID, seatIDs []uuid.UUID, userID uuid.UUID) (models.HoldDetails, error) {
 	showtime, err := movies.GetShowtime(ctx, showtimeID)
@@ -154,4 +159,115 @@ func DeleteHold(ctx context.Context, client *redis.Client, holdID uuid.UUID, use
 	}
 
 	return errors.New("internal server error")
+}
+
+func ConfirmHold(ctx context.Context, client *redis.Client, movies *movieclient.Client, pool *pgxpool.Pool, userID uuid.UUID, holdID uuid.UUID) (models.Booking, error) {
+	existingBooking, found, err := repository.GetBookingByHoldID(ctx, pool, holdID)
+	if err != nil {
+		return models.Booking{}, err
+	}
+	if found {
+		if existingBooking.UserID != userID {
+			return models.Booking{}, ErrHoldDoesntBelongToUser
+		}
+		// The booking is already committed. A failed cleanup can leave only a
+		// temporary Redis hold; the database uniqueness constraint protects the seats.
+		_ = DeleteHold(ctx, client, holdID, userID)
+		return existingBooking, nil
+	}
+
+	holdKey := "hold:" + holdID.String()
+	holdUserID, err := client.HGet(ctx, holdKey, "user_id").Result()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return models.Booking{}, ErrHoldExpiredOrMissing
+		}
+		return models.Booking{}, fmt.Errorf("read hold owner: %w", err)
+	}
+	if holdUserID != userID.String() {
+		return models.Booking{}, ErrHoldDoesntBelongToUser
+	}
+
+	fields, err := client.HGetAll(ctx, holdKey).Result()
+	if err != nil {
+		return models.Booking{}, fmt.Errorf("read hold details: %w", err)
+	}
+	if len(fields) == 0 {
+		return models.Booking{}, ErrHoldExpiredOrMissing
+	}
+
+	var showtimeID uuid.UUID
+	var seatIDs []uuid.UUID
+	for field, seatKey := range fields {
+		if !strings.HasPrefix(field, "seat:") {
+			continue
+		}
+		heldBy, err := client.Get(ctx, seatKey).Result()
+		if errors.Is(err, redis.Nil) || (err == nil && heldBy != holdID.String()) {
+			return models.Booking{}, ErrHoldExpiredOrMissing
+		}
+		if err != nil {
+			return models.Booking{}, fmt.Errorf("verify held seat: %w", err)
+		}
+
+		parts := strings.SplitN(seatKey, ":", 3)
+		if len(parts) != 3 || parts[0] != "hold" {
+			return models.Booking{}, ErrInvalidHoldDetails
+		}
+
+		parsedShowtimeID, err := uuid.Parse(parts[1])
+		if err != nil {
+			return models.Booking{}, ErrInvalidHoldDetails
+		}
+
+		seatID, err := uuid.Parse(parts[2])
+		if err != nil {
+			return models.Booking{}, ErrInvalidHoldDetails
+		}
+		if showtimeID == uuid.Nil {
+			showtimeID = parsedShowtimeID
+		} else if showtimeID != parsedShowtimeID {
+			return models.Booking{}, ErrInvalidHoldDetails
+		}
+		seatIDs = append(seatIDs, seatID)
+	}
+	if len(seatIDs) == 0 || showtimeID == uuid.Nil {
+		return models.Booking{}, ErrHoldExpiredOrMissing
+	}
+
+	showtime, err := movies.GetShowtime(ctx, showtimeID)
+	if err != nil {
+		return models.Booking{}, err
+	}
+
+	booking := models.Booking{
+		ID:         uuid.New(),
+		HoldID:     holdID,
+		UserID:     userID,
+		ShowtimeID: showtimeID,
+		Status:     "confirmed",
+	}
+	bookingSeats := make([]models.BookingSeat, 0, len(seatIDs))
+	for _, seatID := range seatIDs {
+		bookingSeats = append(bookingSeats, models.BookingSeat{
+			BookingID:  booking.ID,
+			ShowtimeID: showtimeID,
+			SeatID:     seatID,
+			PriceCents: showtime.PriceCents,
+		})
+	}
+	_, err = repository.InsertBooking(ctx, pool, &booking, bookingSeats)
+	if err != nil {
+		return models.Booking{}, err
+	}
+	if booking.UserID != userID {
+		return models.Booking{}, ErrHoldDoesntBelongToUser
+	}
+
+	if err := DeleteHold(ctx, client, holdID, userID); err != nil {
+		if !errors.Is(err, ErrHoldExpiredOrMissing) {
+			return booking, errors.New("internal server error")
+		}
+	}
+	return booking, nil
 }

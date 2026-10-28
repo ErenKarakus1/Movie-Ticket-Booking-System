@@ -23,8 +23,9 @@ type Seat struct {
 }
 
 type Showtime struct {
-	ID       uuid.UUID `json:"id"`
-	StartsAt time.Time `json:"starts_at"`
+	ID         uuid.UUID `json:"id"`
+	StartsAt   time.Time `json:"starts_at"`
+	PriceCents int       `json:"price_cents"`
 }
 
 type Client struct {
