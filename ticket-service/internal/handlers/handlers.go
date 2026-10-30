@@ -6,6 +6,7 @@ import (
 
 	"github.com/ErenKarakus1/Movie-Ticket-Booking-System/ticket-service/internal/models"
 	"github.com/ErenKarakus1/Movie-Ticket-Booking-System/ticket-service/internal/movieclient"
+	"github.com/ErenKarakus1/Movie-Ticket-Booking-System/ticket-service/internal/repository"
 	"github.com/ErenKarakus1/Movie-Ticket-Booking-System/ticket-service/internal/services"
 	"github.com/ErenKarakus1/Movie-Ticket-Booking-System/ticket-service/internal/validations"
 	"github.com/gin-gonic/gin"
@@ -174,5 +175,44 @@ func ConfirmHoldHandler(client *redis.Client, movies *movieclient.Client, pool *
 		}
 
 		ctx.JSON(http.StatusCreated, booking)
+	}
+}
+
+func GetBookingHandler(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		userID := ctx.GetHeader("X-User-ID")
+		if userID == "" {
+			ctx.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
+
+		parsedUserID, err := uuid.Parse(userID)
+		if err != nil {
+			ctx.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
+
+		bookingID := ctx.Param("id")
+		if bookingID == "" {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "booking id is required"})
+			return
+		}
+		parsedBookingID, err := uuid.Parse(bookingID)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid booking id"})
+			return
+		}
+
+		resp, err := services.GetBooking(ctx, pool, parsedBookingID, parsedUserID)
+		if err != nil {
+			if errors.Is(err, repository.ErrBookingNotFound) {
+				ctx.JSON(http.StatusNotFound, gin.H{"error": "booking not found"})
+				return
+			}
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+
+		ctx.JSON(http.StatusOK, resp)
 	}
 }

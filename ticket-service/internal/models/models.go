@@ -32,3 +32,16 @@ type BookingSeat struct {
 	SeatID     uuid.UUID `json:"seat_id"`
 	PriceCents int       `json:"price_cents"`
 }
+
+type GetBookingSeatResponse struct {
+	SeatID     uuid.UUID `json:"seat_id"`
+	PriceCents int       `json:"price_cents"`
+}
+
+type GetBookingResponse struct {
+	ID         uuid.UUID                `json:"id"`
+	ShowtimeID uuid.UUID                `json:"showtime_id"`
+	Status     string                   `json:"status"`
+	CreatedAt  time.Time                `json:"created_at"`
+	Seats      []GetBookingSeatResponse `json:"seats"`
+}

@@ -12,6 +12,7 @@ import (
 )
 
 var ErrSeatAlreadyBooked = errors.New("seat already booked")
+var ErrBookingNotFound = errors.New("booking not found")
 
 const insertBookingSQL = `
 	INSERT INTO bookings (
@@ -46,6 +47,25 @@ const getBookingByHoldIDSQL = `
 		created_at
 	FROM bookings
 	WHERE hold_id = $1
+`
+
+const getBookingByIDSQL = `
+	SELECT 
+		id, 
+		showtime_id, 
+		status, 
+		created_at
+	FROM bookings
+	WHERE id = $1
+	AND user_id=$2
+`
+
+const getBookingSeatsByIDSQL = `
+	SELECT
+		seat_id,
+		price_cents
+	FROM booking_seats
+	WHERE booking_id=$1
 `
 
 func GetBookingByHoldID(ctx context.Context, pool *pgxpool.Pool, holdID uuid.UUID) (models.Booking, bool, error) {
@@ -122,4 +142,57 @@ func InsertBooking(ctx context.Context, pool *pgxpool.Pool, booking *models.Book
 		return false, errors.New("internal server error")
 	}
 	return true, nil
+}
+
+func GetBooking(ctx context.Context, pool *pgxpool.Pool, bookingID uuid.UUID, userID uuid.UUID) (models.GetBookingResponse, error) {
+	var resp models.GetBookingResponse
+	err := pool.QueryRow(
+		ctx,
+		getBookingByIDSQL,
+		bookingID,
+		userID,
+	).Scan(
+		&resp.ID,
+		&resp.ShowtimeID,
+		&resp.Status,
+		&resp.CreatedAt,
+	)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.GetBookingResponse{}, ErrBookingNotFound
+		}
+		return models.GetBookingResponse{}, errors.New("internal server error")
+	}
+
+	var seats []models.GetBookingSeatResponse
+	rows, err := pool.Query(
+		ctx,
+		getBookingSeatsByIDSQL,
+		bookingID,
+	)
+	if err != nil {
+		return models.GetBookingResponse{}, errors.New("internal server error")
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var seat models.GetBookingSeatResponse
+		err := rows.Scan(
+			&seat.SeatID,
+			&seat.PriceCents,
+		)
+		if err != nil {
+			return models.GetBookingResponse{}, errors.New("internal server error")
+		}
+		seats = append(seats, seat)
+	}
+
+	if err := rows.Err(); err != nil {
+		return models.GetBookingResponse{}, errors.New("internal server error")
+	}
+
+	resp.Seats = seats
+
+	return resp, nil
 }

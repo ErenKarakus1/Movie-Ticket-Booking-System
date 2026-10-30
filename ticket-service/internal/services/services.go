@@ -271,3 +271,15 @@ func ConfirmHold(ctx context.Context, client *redis.Client, movies *movieclient.
 	}
 	return booking, nil
 }
+
+func GetBooking(ctx context.Context, pool *pgxpool.Pool, bookingID uuid.UUID, userID uuid.UUID) (models.GetBookingResponse, error) {
+	resp, err := repository.GetBooking(ctx, pool, bookingID, userID)
+	if err != nil {
+		if errors.Is(err, repository.ErrBookingNotFound) {
+			return models.GetBookingResponse{}, err
+		}
+		return models.GetBookingResponse{}, errors.New("internal server error")
+	}
+
+	return resp, err
+}
