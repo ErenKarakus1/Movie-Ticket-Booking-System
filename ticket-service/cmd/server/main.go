@@ -40,6 +40,7 @@ func main() {
 	router.DELETE("/holds/:id", middlewares.UserMiddleware(), handlers.DeleteHoldHandler(client))
 	router.POST("/holds/:id/confirm", middlewares.UserMiddleware(), handlers.ConfirmHoldHandler(client, movies, pool))
 	router.GET("/bookings/:id", middlewares.UserMiddleware(), handlers.GetBookingHandler(pool))
+	router.GET("/users/me/bookings", middlewares.UserMiddleware(), handlers.GetAllBookingsHandler(pool))
 
 	if err := router.Run(":8083"); err != nil {
 		log.Fatal(err)

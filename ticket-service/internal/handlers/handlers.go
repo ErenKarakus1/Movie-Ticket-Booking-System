@@ -203,7 +203,7 @@ func GetBookingHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		resp, err := services.GetBooking(ctx, pool, parsedBookingID, parsedUserID)
+		resp, err := services.GetBooking(ctx.Request.Context(), pool, parsedBookingID, parsedUserID)
 		if err != nil {
 			if errors.Is(err, repository.ErrBookingNotFound) {
 				ctx.JSON(http.StatusNotFound, gin.H{"error": "booking not found"})
@@ -214,5 +214,32 @@ func GetBookingHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 		}
 
 		ctx.JSON(http.StatusOK, resp)
+	}
+}
+
+func GetAllBookingsHandler(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		userID := ctx.GetHeader("X-User-ID")
+		if userID == "" {
+			ctx.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
+
+		parsedUserID, err := uuid.Parse(userID)
+		if err != nil {
+			ctx.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
+
+		resp, err := services.GetAllBookings(ctx.Request.Context(), pool, parsedUserID)
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+		if resp == nil {
+			resp = []models.GetBookingResponse{}
+		}
+
+		ctx.JSON(http.StatusOK, gin.H{"bookings": resp})
 	}
 }

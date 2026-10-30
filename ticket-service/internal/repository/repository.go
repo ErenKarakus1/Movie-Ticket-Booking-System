@@ -68,6 +68,17 @@ const getBookingSeatsByIDSQL = `
 	WHERE booking_id=$1
 `
 
+const getAllBookingsByUserIDSQL = `
+	SELECT 
+		id, 
+		showtime_id, 
+		status, 
+		created_at
+	FROM bookings
+	WHERE user_id=$1
+	ORDER BY created_at DESC
+`
+
 func GetBookingByHoldID(ctx context.Context, pool *pgxpool.Pool, holdID uuid.UUID) (models.Booking, bool, error) {
 	var booking models.Booking
 	err := pool.QueryRow(ctx, getBookingByHoldIDSQL, holdID).Scan(
@@ -195,4 +206,67 @@ func GetBooking(ctx context.Context, pool *pgxpool.Pool, bookingID uuid.UUID, us
 	resp.Seats = seats
 
 	return resp, nil
+}
+
+func GetAllBookings(ctx context.Context, pool *pgxpool.Pool, userID uuid.UUID) ([]models.GetBookingResponse, error) {
+	bookingRows, err := pool.Query(
+		ctx,
+		getAllBookingsByUserIDSQL,
+		userID,
+	)
+	if err != nil {
+		return []models.GetBookingResponse{}, errors.New("internal server error")
+	}
+	defer bookingRows.Close()
+
+	var bookings []models.GetBookingResponse
+	for bookingRows.Next() {
+		var booking models.GetBookingResponse
+		err := bookingRows.Scan(
+			&booking.ID,
+			&booking.ShowtimeID,
+			&booking.Status,
+			&booking.CreatedAt,
+		)
+		if err != nil {
+			return []models.GetBookingResponse{}, errors.New("internal server error")
+		}
+		bookings = append(bookings, booking)
+	}
+	if err := bookingRows.Err(); err != nil {
+		return []models.GetBookingResponse{}, errors.New("internal server error")
+	}
+
+	for idx, booking := range bookings {
+		seatRows, err := pool.Query(
+			ctx,
+			getBookingSeatsByIDSQL,
+			booking.ID,
+		)
+		if err != nil {
+			return []models.GetBookingResponse{}, errors.New("internal server error")
+		}
+
+		var seats []models.GetBookingSeatResponse
+		for seatRows.Next() {
+			var seat models.GetBookingSeatResponse
+			err := seatRows.Scan(
+				&seat.SeatID,
+				&seat.PriceCents,
+			)
+			if err != nil {
+				seatRows.Close()
+				return []models.GetBookingResponse{}, errors.New("internal server error")
+			}
+			seats = append(seats, seat)
+		}
+		if err := seatRows.Err(); err != nil {
+			seatRows.Close()
+			return []models.GetBookingResponse{}, errors.New("internal server error")
+		}
+		bookings[idx].Seats = seats
+		seatRows.Close()
+	}
+
+	return bookings, nil
 }

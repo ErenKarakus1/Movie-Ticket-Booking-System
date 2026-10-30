@@ -283,3 +283,11 @@ func GetBooking(ctx context.Context, pool *pgxpool.Pool, bookingID uuid.UUID, us
 
 	return resp, err
 }
+
+func GetAllBookings(ctx context.Context, pool *pgxpool.Pool, userID uuid.UUID) ([]models.GetBookingResponse, error) {
+	resp, err := repository.GetAllBookings(ctx, pool, userID)
+	if err != nil {
+		return []models.GetBookingResponse{}, errors.New("internal server error")
+	}
+	return resp, nil
+}
