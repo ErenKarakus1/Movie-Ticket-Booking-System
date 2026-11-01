@@ -1,4 +1,4 @@
-# Movie Ticket Booking System
+﻿# Movie Ticket Booking System
 
 ![Go](https://img.shields.io/badge/Go-1.26-00ADD8?style=for-the-badge&logo=go&logoColor=white)
 ![Gin](https://img.shields.io/badge/Gin-008ECF?style=for-the-badge&logo=gin&logoColor=white)
@@ -71,23 +71,31 @@ Each service has its own Go module, configuration, handlers, and database access
 
 ```text
 movie-ticket-booking-system/
-├── api-gateway/
-│   ├── cmd/server/
-│   └── internal/
-├── auth-service/
-│   ├── cmd/server/
-│   ├── internal/
-│   └── migrations/
-├── movie-service/
-│   ├── cmd/server/
-│   ├── internal/
-│   └── migrations/
-├── ticket-service/
-│   ├── cmd/server/
-│   ├── internal/
-│   └── migrations/
-├── LICENSE
-└── README.md
+|-- api-gateway/
+|   |-- cmd/server/
+|   |-- internal/
+|   `-- .env.example
+|-- auth-service/
+|   |-- cmd/server/
+|   |-- internal/
+|   |-- migrations/
+|   `-- .env.example
+|-- movie-service/
+|   |-- cmd/server/
+|   |-- internal/
+|   |-- migrations/
+|   `-- .env.example
+|-- ticket-service/
+|   |-- cmd/server/
+|   |-- internal/
+|   |-- migrations/
+|   `-- .env.example
+|-- tests/
+|   `-- e2e/
+|       |-- booking_test.go
+|       `-- go.mod
+|-- LICENSE
+`-- README.md
 ```
 
 ## Service Ports
@@ -344,7 +352,31 @@ Each service is a separate Go module. From a service directory, build it with:
 go build ./...
 ```
 
-There is no automated test suite in the repository yet.
+## Tests
+
+Run the unit tests from the repository root:
+
+```bash
+go -C auth-service test ./...
+go -C movie-service test ./...
+go -C ticket-service test ./...
+go -C api-gateway test ./...
+```
+
+The unit tests cover invalid registration, login, movie, showtime, seat, and hold inputs, plus gateway JWT rejection and trusted identity-header behavior.
+
+The opt-in end-to-end test creates temporary admin and user accounts, then creates a movie, auditorium, seat, and showtime through the gateway. It checks rejected registration and login requests, unauthenticated admin access, an invalid movie ID, an overlapping showtime, and a second user's attempt to hold an already-held seat. It also verifies the successful hold, booking confirmation, and booking lookup flow.
+
+Start PostgreSQL, Redis, and all four services, then run the E2E test with a disposable PostgreSQL database that has all migrations applied:
+
+```bash
+cd tests/e2e
+E2E_GATEWAY_URL=http://localhost:8080 \
+E2E_DATABASE_URL='postgres://user:password@127.0.0.1:5432/test_database?sslmode=disable' \
+go test -v
+```
+
+The E2E test skips when these variables are missing. It creates temporary user accounts (promoting one directly in the test database), runs the booking flow, and removes created database records during cleanup. Use a dedicated test database: the cleanup connects directly to PostgreSQL and deletes the rows created by the test.
 
 ## Security Notes
 
