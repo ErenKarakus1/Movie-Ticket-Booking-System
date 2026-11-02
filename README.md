@@ -386,6 +386,15 @@ The E2E test skips when these variables are missing. It creates temporary user a
 * The gateway's upstream URLs currently target `localhost`; update them for container or remote deployments.
 * This project is under active development and has not had an independent security review.
 
+## Future Improvements
+
+* Add payment processing with payment status tracking and refund handling.
+* Define a booking cancellation policy and implement cancellation for confirmed bookings.
+* Add pagination and filtering for movie, showtime, and booking lists.
+* Make service URLs configurable and add containerized deployment configuration.
+* Add health checks, metrics, and structured logs for service monitoring.
+* Expand automated coverage with repository tests and Redis concurrency tests.
+
 ## Current Scope
 
 The repository contains backend services and an API gateway. It does not currently include a frontend, payment integration, booking cancellation endpoint, or deployment manifests. Seat holds and booking confirmation are implemented; cancellations and payment flows can be added according to the desired booking policy.
