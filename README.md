@@ -388,6 +388,7 @@ The E2E test skips when these variables are missing. It creates temporary user a
 
 ## Future Improvements
 
+* Build a frontend for browsing movies and showtimes, selecting seats, and managing bookings.
 * Add payment processing with payment status tracking and refund handling.
 * Define a booking cancellation policy and implement cancellation for confirmed bookings.
 * Add pagination and filtering for movie, showtime, and booking lists.
