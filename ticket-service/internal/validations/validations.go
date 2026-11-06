@@ -9,17 +9,17 @@ import (
 
 func ValidateCreateHoldRequest(req models.CreateHoldRequest) error {
 	if len(req.SeatIDs) == 0 {
-		return errors.New("at least 1 seat id is required")
+		return errors.New("select at least one seat")
 	}
 
 	if len(req.SeatIDs) > 500 {
-		return errors.New("at most 500 seat ids at a time is allowed")
+		return errors.New("you can request at most 500 seats at a time")
 	}
 
 	seen := make(map[uuid.UUID]struct{}, len(req.SeatIDs))
 	for _, id := range req.SeatIDs {
 		if _, exists := seen[id]; exists {
-			return errors.New("duplicate seat id in request")
+			return errors.New("the request contains the same seat more than once")
 		}
 		seen[id] = struct{}{}
 	}

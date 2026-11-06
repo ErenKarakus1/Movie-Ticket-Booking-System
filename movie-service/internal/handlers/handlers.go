@@ -164,7 +164,7 @@ func AddShowtimeHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 				return
 			}
 			if errors.Is(err, repository.ErrOverlap) {
-				ctx.JSON(http.StatusConflict, gin.H{"error": "showtime overlaps with another screening at the auditorium"})
+				ctx.JSON(http.StatusConflict, gin.H{"error": "this time conflicts with another showtime in the auditorium"})
 				return
 			}
 			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
@@ -233,7 +233,7 @@ func CreateSeatsHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 		seats, err := services.CreateSeats(ctx.Request.Context(), pool, parsedAuditoriumID, req)
 		if err != nil {
 			if errors.Is(err, repository.ErrSeatExists) {
-				ctx.JSON(http.StatusConflict, gin.H{"error": "one or more seats are already exists in the auditorium"})
+				ctx.JSON(http.StatusConflict, gin.H{"error": "one or more seats already exist in this auditorium"})
 				return
 			}
 			if errors.Is(err, repository.ErrAuditoriumNotFound) {
@@ -280,6 +280,10 @@ func GetSeatsHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 func GetShowtimeHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		showtimeID := ctx.Param("id")
+		if showtimeID == "" {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "showtime ID is required"})
+			return
+		}
 		parsedShowtimeID, err := uuid.Parse(showtimeID)
 		if err != nil {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid showtime id"})

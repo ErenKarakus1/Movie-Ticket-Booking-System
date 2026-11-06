@@ -28,7 +28,7 @@ func ValidateRegisterRequest(r models.RegisterRequest) error {
 	}
 
 	if len(r.Email) > 128 {
-		return errors.New("email must be at most 128 bytes")
+		return errors.New("email must be 128 bytes or fewer")
 	}
 	_, err := mail.ParseAddress(r.Email)
 	if err != nil {
@@ -46,11 +46,11 @@ func ValidateRegisterRequest(r models.RegisterRequest) error {
 	}
 
 	if passwordLength > 32 {
-		return errors.New("password must be at most 32 characters")
+		return errors.New("password must be 32 characters or fewer")
 	}
 
 	if len(r.Password) > 72 {
-		return errors.New("password must be at most 72 bytes")
+		return errors.New("password must be 72 bytes or fewer")
 	}
 
 	return nil

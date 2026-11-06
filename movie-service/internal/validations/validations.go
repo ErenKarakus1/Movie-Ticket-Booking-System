@@ -31,7 +31,7 @@ func ValidateAddMovieRequest(req models.AddMovieRequest) error {
 	}
 
 	if req.DurationMinutes <= 0 {
-		return errors.New("duration minutes is required")
+		return errors.New("duration must be greater than zero minutes")
 	}
 
 	if req.ReleaseDate == "" {
@@ -39,7 +39,7 @@ func ValidateAddMovieRequest(req models.AddMovieRequest) error {
 	}
 
 	if _, err := time.Parse("2006-01-02", req.ReleaseDate); err != nil {
-		return errors.New("invalid release date format")
+		return errors.New("release date must use YYYY-MM-DD format")
 	}
 
 	return nil
@@ -61,7 +61,7 @@ func ValidateCreateAuditoriumRequest(r models.CreateAuditoriumRequest) error {
 
 func ValidateAddShowtimeRequest(req models.AddShowtimeRequest) error {
 	if req.PriceCents < 0 {
-		return errors.New("invalid price cents")
+		return errors.New("price must be zero or greater, in cents")
 	}
 	if req.AuditoriumID == uuid.Nil {
 		return errors.New("auditorium id is required")
@@ -70,7 +70,7 @@ func ValidateAddShowtimeRequest(req models.AddShowtimeRequest) error {
 		return errors.New("start time is required")
 	}
 	if req.StartsAt.Before(time.Now()) {
-		return errors.New("start time must be a future time")
+		return errors.New("showtime must start in the future")
 	}
 	return nil
 }
@@ -85,7 +85,7 @@ func ValidateCreateSeatsRequest(req []models.CreateSeatRequest) error {
 		return errors.New("at least one seat is required")
 	}
 	if len(req) > 500 {
-		return errors.New("at most 500 seats at a time is allowed")
+		return errors.New("you can create at most 500 seats per request")
 	}
 
 	seen := make(map[seatKey]struct{}, len(req))
@@ -94,18 +94,18 @@ func ValidateCreateSeatsRequest(req []models.CreateSeatRequest) error {
 			return errors.New("all seats must have a row label")
 		}
 		if seat.SeatNumber <= 0 {
-			return errors.New("all seats must have a valid seat number")
+			return errors.New("each seat must have a seat number greater than zero")
 		}
 		charLen := utf8.RuneCountInString(seat.RowLabel)
 		if charLen > 128 {
-			return errors.New("all row labels must be at most 128 characters")
+			return errors.New("row labels must be 128 characters or fewer")
 		}
 		key := seatKey{
 			rowLabel:   seat.RowLabel,
 			seatNumber: seat.SeatNumber,
 		}
 		if _, exists := seen[key]; exists {
-			return errors.New("duplicate seat in request")
+			return errors.New("the request contains the same seat more than once")
 		}
 		seen[key] = struct{}{}
 	}

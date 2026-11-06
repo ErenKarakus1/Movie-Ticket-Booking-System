@@ -112,7 +112,7 @@ func DeleteHoldHandler(client *redis.Client) gin.HandlerFunc {
 				return
 			}
 			if errors.Is(err, services.ErrHoldDoesntBelongToUser) {
-				ctx.JSON(http.StatusForbidden, gin.H{"error": "hold belongs to another user"})
+				ctx.JSON(http.StatusForbidden, gin.H{"error": "you are not authorized to access this hold"})
 				return
 			}
 			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
