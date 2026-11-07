@@ -23,6 +23,59 @@ var ErrHoldDoesntBelongToUser = errors.New("hold belongs to another user")
 var ErrInvalidHoldDetails = errors.New("invalid hold details")
 var ErrSeatAlreadyBooked = repository.ErrSeatAlreadyBooked
 
+const (
+	SeatStatusAvailable = "available"
+	SeatStatusHeld      = "held"
+	SeatStatusBooked    = "booked"
+)
+
+func GetShowtimeSeats(ctx context.Context, client *redis.Client, movies *movieclient.Client, pool *pgxpool.Pool, showtimeID uuid.UUID) ([]models.ShowtimeSeat, error) {
+	seats, err := movies.GetShowtimeSeats(ctx, showtimeID)
+	if err != nil {
+		return nil, err
+	}
+
+	bookedSeatIDs, err := repository.GetBookedSeatIDsByShowtime(ctx, pool, showtimeID)
+	if err != nil {
+		return nil, err
+	}
+	booked := make(map[uuid.UUID]struct{}, len(bookedSeatIDs))
+	for _, seatID := range bookedSeatIDs {
+		booked[seatID] = struct{}{}
+	}
+
+	seatKeys := make([]string, len(seats))
+	for i, seat := range seats {
+		seatKeys[i] = fmt.Sprintf("hold:%s:%s", showtimeID, seat.ID)
+	}
+	var holds []any
+	if len(seatKeys) > 0 {
+		holds, err = client.MGet(ctx, seatKeys...).Result()
+		if err != nil {
+			return nil, errors.New("internal server error")
+		}
+	}
+
+	result := make([]models.ShowtimeSeat, len(seats))
+	for i, seat := range seats {
+		status := SeatStatusAvailable
+		if _, isBooked := booked[seat.ID]; isBooked {
+			status = SeatStatusBooked
+		} else if i < len(holds) && holds[i] != nil {
+			status = SeatStatusHeld
+		}
+		result[i] = models.ShowtimeSeat{
+			ID:           seat.ID,
+			AuditoriumID: seat.AuditoriumID,
+			RowLabel:     seat.RowLabel,
+			SeatNumber:   seat.SeatNumber,
+			CreatedAt:    seat.CreatedAt,
+			Status:       status,
+		}
+	}
+	return result, nil
+}
+
 func CreateHold(ctx context.Context, client *redis.Client, movies *movieclient.Client, showtimeID uuid.UUID, seatIDs []uuid.UUID, userID uuid.UUID) (models.HoldDetails, error) {
 	showtime, err := movies.GetShowtime(ctx, showtimeID)
 	if err != nil {
@@ -245,7 +298,6 @@ func ConfirmHold(ctx context.Context, client *redis.Client, movies *movieclient.
 		HoldID:     holdID,
 		UserID:     userID,
 		ShowtimeID: showtimeID,
-		Status:     "confirmed",
 	}
 	bookingSeats := make([]models.BookingSeat, 0, len(seatIDs))
 	for _, seatID := range seatIDs {

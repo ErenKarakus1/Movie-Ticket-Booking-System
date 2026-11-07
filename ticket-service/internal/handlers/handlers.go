@@ -80,6 +80,32 @@ func CreateHold(client *redis.Client, movies *movieclient.Client) gin.HandlerFun
 	}
 }
 
+func GetShowtimeSeatsHandler(client *redis.Client, movies *movieclient.Client, pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		showtimeID, err := uuid.Parse(ctx.Param("id"))
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid showtime ID"})
+			return
+		}
+
+		seats, err := services.GetShowtimeSeats(ctx.Request.Context(), client, movies, pool, showtimeID)
+		if err != nil {
+			if errors.Is(err, movieclient.ErrShowtimeNotFound) {
+				ctx.JSON(http.StatusNotFound, gin.H{"error": "showtime not found"})
+				return
+			}
+			if errors.Is(err, movieclient.ErrUnavailable) {
+				ctx.JSON(http.StatusServiceUnavailable, gin.H{"error": "movie service unavailable"})
+				return
+			}
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+
+		ctx.JSON(http.StatusOK, seats)
+	}
+}
+
 func DeleteHoldHandler(client *redis.Client) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		userID := ctx.GetHeader("X-User-ID")

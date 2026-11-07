@@ -33,7 +33,7 @@ func main() {
 	router.GET("/movies/:id", movieProxy)
 	router.GET("/movies/:id/showtimes", movieProxy)
 	router.GET("/showtimes/:id", movieProxy)
-	router.GET("/showtimes/:id/seats", movieProxy)
+	router.GET("/showtimes/:id/seats", ticketProxy)
 
 	protected := router.Group("/")
 	protected.Use(middlewares.AuthMiddleware(cfg.JWTSecret), middlewares.RateLimiter(redisClient, 100, time.Minute))

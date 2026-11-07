@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"os"
 	"strconv"
@@ -75,6 +76,25 @@ func TestBookingFlowAndRejectedRequests(t *testing.T) {
 		if err := json.Unmarshal(data, dst); err != nil {
 			t.Fatalf("decode response %s: %v", data, err)
 		}
+	}
+	assertSeatStatus := func(showtimeID, seatID, want string) {
+		t.Helper()
+		got := request(http.MethodGet, "/showtimes/"+showtimeID+"/seats", "", nil)
+		assertStatus(got, http.StatusOK, "get showtime seat availability")
+		var seats []struct {
+			ID     string `json:"id"`
+			Status string `json:"status"`
+		}
+		decode(got.body, &seats)
+		for _, seat := range seats {
+			if seat.ID == seatID {
+				if seat.Status != want {
+					t.Fatalf("seat %s status = %q, want %q", seatID, seat.Status, want)
+				}
+				return
+			}
+		}
+		t.Fatalf("seat %s not found in availability response: %s", seatID, got.body)
 	}
 
 	// Rejected paths: no token, invalid IDs, invalid request data, and duplicate seat holds.
@@ -190,6 +210,7 @@ func TestBookingFlowAndRejectedRequests(t *testing.T) {
 		t.Fatalf("showtime response has no id: %s", showtime.body)
 	}
 	showtimeID = showtimeData.ID
+	assertSeatStatus(showtimeData.ID, seatRows[0].ID, "available")
 
 	// Scheduling another screening in the same auditorium at the same time must conflict.
 	assertStatus(request(http.MethodPost, "/movies/"+movie.ID+"/showtimes", loginBody.Token, showtimeBody), http.StatusConflict, "overlapping showtime")
@@ -214,16 +235,6 @@ func TestBookingFlowAndRejectedRequests(t *testing.T) {
 	decode(userLogin.body, &userLoginBody)
 	userToken = userLoginBody.Token
 	seatID := seatRows[0].ID
-	hold := request(http.MethodPost, "/showtimes/"+showtimeData.ID+"/holds", userLoginBody.Token, map[string][]string{"seat_ids": {seatID}})
-	assertStatus(hold, http.StatusCreated, "hold test seat")
-	var holdData struct {
-		HoldID string `json:"hold_id"`
-	}
-	decode(hold.body, &holdData)
-	if holdData.HoldID == "" {
-		t.Fatalf("hold response has no hold id: %s", hold.body)
-	}
-	holdID = holdData.HoldID
 	secondEmail := "e2e-second-" + suffix + "@example.com"
 	secondRegistration := request(http.MethodPost, "/auth/register", "", map[string]string{"name": "Second User", "email": secondEmail, "password": "ValidPass123"})
 	assertStatus(secondRegistration, http.StatusCreated, "register second test user")
@@ -241,10 +252,80 @@ func TestBookingFlowAndRejectedRequests(t *testing.T) {
 		Token string `json:"token"`
 	}
 	decode(secondLogin.body, &secondLoginBody)
-	// A second hold by another user must fail while the first user's hold is live.
-	assertStatus(request(http.MethodPost, "/showtimes/"+showtimeData.ID+"/holds", secondLoginBody.Token, map[string][]string{"seat_ids": {seatID}}), http.StatusConflict, "hold already-held seat")
 
-	booking := request(http.MethodPost, "/holds/"+holdData.HoldID+"/confirm", userLoginBody.Token, nil)
+	type holdAttempt struct {
+		token string
+		resp  response
+		err   error
+	}
+	raceHold := func(token string) (response, error) {
+		payload, err := json.Marshal(map[string][]string{"seat_ids": {seatID}})
+		if err != nil {
+			return response{}, err
+		}
+		req, err := http.NewRequest(http.MethodPost, baseURL+"/showtimes/"+showtimeData.ID+"/holds", bytes.NewReader(payload))
+		if err != nil {
+			return response{}, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token)
+		res, err := client.Do(req)
+		if err != nil {
+			return response{}, err
+		}
+		defer res.Body.Close()
+		body, err := io.ReadAll(res.Body)
+		if err != nil {
+			return response{}, err
+		}
+		return response{status: res.StatusCode, body: body}, nil
+	}
+
+	start := make(chan struct{})
+	attempts := make(chan holdAttempt, 2)
+	for _, token := range []string{userLoginBody.Token, secondLoginBody.Token} {
+		go func(token string) {
+			<-start
+			resp, err := raceHold(token)
+			attempts <- holdAttempt{token: token, resp: resp, err: err}
+		}(token)
+	}
+	close(start)
+
+	var winner holdAttempt
+	conflictCount := 0
+	for range 2 {
+		attempt := <-attempts
+		if attempt.err != nil {
+			t.Fatalf("concurrent seat hold request failed: %v", attempt.err)
+		}
+		switch attempt.resp.status {
+		case http.StatusCreated:
+			if winner.resp.status != 0 {
+				t.Fatalf("both concurrent requests acquired the same seat: first=%s second=%s", winner.resp.body, attempt.resp.body)
+			}
+			winner = attempt
+		case http.StatusConflict:
+			conflictCount++
+		default:
+			t.Fatalf("concurrent hold returned unexpected status %d: %s", attempt.resp.status, attempt.resp.body)
+		}
+	}
+	if winner.resp.status != http.StatusCreated || conflictCount != 1 {
+		t.Fatalf("expected one successful hold and one conflict; winner status=%d, conflicts=%d", winner.resp.status, conflictCount)
+	}
+	userToken = winner.token
+	var holdData struct {
+		HoldID string `json:"hold_id"`
+	}
+	decode(winner.resp.body, &holdData)
+	if holdData.HoldID == "" {
+		t.Fatalf("winning hold response has no hold id: %s", winner.resp.body)
+	}
+	holdID = holdData.HoldID
+	assertSeatStatus(showtimeData.ID, seatID, "held")
+
+	booking := request(http.MethodPost, "/holds/"+holdData.HoldID+"/confirm", winner.token, nil)
 	assertStatus(booking, http.StatusCreated, "confirm test booking")
 	var bookingData struct {
 		ID string `json:"id"`
@@ -254,5 +335,6 @@ func TestBookingFlowAndRejectedRequests(t *testing.T) {
 		t.Fatalf("booking response has no id: %s", booking.body)
 	}
 	bookingID = bookingData.ID
-	assertStatus(request(http.MethodGet, "/bookings/"+bookingData.ID, userLoginBody.Token, nil), http.StatusOK, "get confirmed booking")
+	assertSeatStatus(showtimeData.ID, seatID, "booked")
+	assertStatus(request(http.MethodGet, "/bookings/"+bookingData.ID, winner.token, nil), http.StatusOK, "get confirmed booking")
 }

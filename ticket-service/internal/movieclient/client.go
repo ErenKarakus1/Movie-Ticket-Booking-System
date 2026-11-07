@@ -19,7 +19,11 @@ var (
 )
 
 type Seat struct {
-	ID uuid.UUID `json:"id"`
+	ID           uuid.UUID `json:"id"`
+	AuditoriumID uuid.UUID `json:"auditorium_id"`
+	RowLabel     string    `json:"row_label"`
+	SeatNumber   int       `json:"seat_number"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 type Showtime struct {

@@ -33,7 +33,7 @@ flowchart LR
     Ticket --> Redis
 ```
 
-The gateway validates JWTs on protected routes and forwards the authenticated user ID and role to downstream services. The ticket service calls the movie service to verify showtimes, seats, and prices.
+The gateway validates JWTs on protected routes and forwards the authenticated user ID and role to downstream services. The ticket service calls the movie service to verify showtimes, seats, and prices, and combines booking and hold data to report seat availability.
 
 ## Booking Flow
 
@@ -63,7 +63,7 @@ sequenceDiagram
     Ticket-->>User: Confirmed booking
 ```
 
-Seat holds expire after up to five minutes, capped at the showtime start. Redis Lua scripts reserve and release a batch atomically. PostgreSQL stores confirmed bookings and enforces uniqueness for active `(showtime_id, seat_id)` pairs.
+Seat holds expire after up to five minutes, capped at the showtime start. Redis Lua scripts reserve and release a batch atomically. PostgreSQL stores confirmed bookings and enforces uniqueness for `(showtime_id, seat_id)` pairs.
 
 ## Project Structure
 
@@ -134,6 +134,7 @@ Responsible for:
 
 * Temporary multi-seat holds in Redis
 * Hold ownership and expiry checks
+* Seat availability status (`available`, `held`, or `booked`)
 * Booking confirmation in a PostgreSQL transaction
 * Booking and booked-seat lookup
 * Per-seat price snapshots at confirmation time
@@ -300,7 +301,7 @@ All client requests should go through `http://localhost:8080`.
 | `GET` | `/movies/:id` | Get a movie |
 | `GET` | `/movies/:id/showtimes` | List a movie's showtimes |
 | `GET` | `/showtimes/:id` | Get showtime details |
-| `GET` | `/showtimes/:id/seats` | List seats in the showtime auditorium |
+| `GET` | `/showtimes/:id/seats` | List showtime seats with availability status |
 
 ### Protected admin endpoints
 
@@ -331,6 +332,8 @@ To create a hold, send seat IDs:
 ```
 
 The response includes a `hold_id` and `expires_at`. Use that hold ID in the confirmation or release endpoint.
+
+The showtime seats endpoint is public. Each seat includes a `status`: `available`, `held` (temporarily reserved in Redis), or `booked` (confirmed in PostgreSQL).
 
 ## Seat Hold Lifecycle
 
@@ -365,7 +368,7 @@ go -C api-gateway test ./...
 
 The unit tests cover invalid registration, login, movie, showtime, seat, and hold inputs, plus gateway JWT rejection and trusted identity-header behavior.
 
-The opt-in end-to-end test creates temporary admin and user accounts, then creates a movie, auditorium, seat, and showtime through the gateway. It checks rejected registration and login requests, unauthenticated admin access, an invalid movie ID, an overlapping showtime, and a second user's attempt to hold an already-held seat. It also verifies the successful hold, booking confirmation, and booking lookup flow.
+The opt-in end-to-end test creates temporary admin and user accounts, then creates a movie, auditorium, seat, and showtime through the gateway. It checks rejected registration and login requests, unauthenticated admin access, an invalid movie ID, and an overlapping showtime. It also races two users to hold the same seat and verifies that exactly one succeeds, then checks the hold, booking confirmation, seat status, and booking lookup flow.
 
 Start PostgreSQL, Redis, and all four services, then run the E2E test with a disposable PostgreSQL database that has all migrations applied:
 

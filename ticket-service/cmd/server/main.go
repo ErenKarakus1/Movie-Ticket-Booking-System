@@ -36,6 +36,7 @@ func main() {
 	}
 
 	router := gin.Default()
+	router.GET("/showtimes/:id/seats", handlers.GetShowtimeSeatsHandler(client, movies, pool))
 	router.POST("/showtimes/:id/holds", middlewares.UserMiddleware(), handlers.CreateHold(client, movies))
 	router.DELETE("/holds/:id", middlewares.UserMiddleware(), handlers.DeleteHoldHandler(client))
 	router.POST("/holds/:id/confirm", middlewares.UserMiddleware(), handlers.ConfirmHoldHandler(client, movies, pool))

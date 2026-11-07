@@ -14,15 +14,20 @@ import (
 var ErrSeatAlreadyBooked = errors.New("seat already booked")
 var ErrBookingNotFound = errors.New("booking not found")
 
+const getBookedSeatIDsByShowtimeSQL = `
+	SELECT seat_id
+	FROM booking_seats
+	WHERE showtime_id = $1
+`
+
 const insertBookingSQL = `
 	INSERT INTO bookings (
 		id,
 		hold_id,
 		user_id,
-		showtime_id,
-		status
+		showtime_id
 	)
-	VALUES ($1, $2, $3, $4, $5)
+	VALUES ($1, $2, $3, $4)
 	ON CONFLICT (hold_id) DO NOTHING
 	RETURNING created_at
 `
@@ -43,7 +48,6 @@ const getBookingByHoldIDSQL = `
 		hold_id, 
 		user_id, 
 		showtime_id, 
-		status, 
 		created_at
 	FROM bookings
 	WHERE hold_id = $1
@@ -53,7 +57,6 @@ const getBookingByIDSQL = `
 	SELECT 
 		id, 
 		showtime_id, 
-		status, 
 		created_at
 	FROM bookings
 	WHERE id = $1
@@ -72,12 +75,32 @@ const getAllBookingsByUserIDSQL = `
 	SELECT 
 		id, 
 		showtime_id, 
-		status, 
 		created_at
 	FROM bookings
 	WHERE user_id=$1
 	ORDER BY created_at DESC
 `
+
+func GetBookedSeatIDsByShowtime(ctx context.Context, pool *pgxpool.Pool, showtimeID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := pool.Query(ctx, getBookedSeatIDsByShowtimeSQL, showtimeID)
+	if err != nil {
+		return nil, errors.New("internal server error")
+	}
+	defer rows.Close()
+
+	var seatIDs []uuid.UUID
+	for rows.Next() {
+		var seatID uuid.UUID
+		if err := rows.Scan(&seatID); err != nil {
+			return nil, errors.New("internal server error")
+		}
+		seatIDs = append(seatIDs, seatID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, errors.New("internal server error")
+	}
+	return seatIDs, nil
+}
 
 func GetBookingByHoldID(ctx context.Context, pool *pgxpool.Pool, holdID uuid.UUID) (models.Booking, bool, error) {
 	var booking models.Booking
@@ -86,7 +109,6 @@ func GetBookingByHoldID(ctx context.Context, pool *pgxpool.Pool, holdID uuid.UUI
 		&booking.HoldID,
 		&booking.UserID,
 		&booking.ShowtimeID,
-		&booking.Status,
 		&booking.CreatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -110,7 +132,6 @@ func InsertBooking(ctx context.Context, pool *pgxpool.Pool, booking *models.Book
 		booking.HoldID,
 		booking.UserID,
 		booking.ShowtimeID,
-		booking.Status,
 	).Scan(&booking.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = tx.QueryRow(ctx, getBookingByHoldIDSQL, booking.HoldID).Scan(
@@ -118,7 +139,6 @@ func InsertBooking(ctx context.Context, pool *pgxpool.Pool, booking *models.Book
 			&booking.HoldID,
 			&booking.UserID,
 			&booking.ShowtimeID,
-			&booking.Status,
 			&booking.CreatedAt,
 		)
 		if err != nil {
@@ -142,7 +162,7 @@ func InsertBooking(ctx context.Context, pool *pgxpool.Pool, booking *models.Book
 		)
 		if err != nil {
 			var pgErr *pgconn.PgError
-			if errors.As(err, &pgErr) && pgErr.ConstraintName == "booking_seats_active_showtime_seat_unique" {
+			if errors.As(err, &pgErr) && (pgErr.ConstraintName == "booking_seats_showtime_seat_unique" || pgErr.ConstraintName == "booking_seats_active_showtime_seat_unique") {
 				return false, ErrSeatAlreadyBooked
 			}
 			return false, errors.New("internal server error")
@@ -165,7 +185,6 @@ func GetBooking(ctx context.Context, pool *pgxpool.Pool, bookingID uuid.UUID, us
 	).Scan(
 		&resp.ID,
 		&resp.ShowtimeID,
-		&resp.Status,
 		&resp.CreatedAt,
 	)
 
@@ -225,7 +244,6 @@ func GetAllBookings(ctx context.Context, pool *pgxpool.Pool, userID uuid.UUID) (
 		err := bookingRows.Scan(
 			&booking.ID,
 			&booking.ShowtimeID,
-			&booking.Status,
 			&booking.CreatedAt,
 		)
 		if err != nil {
