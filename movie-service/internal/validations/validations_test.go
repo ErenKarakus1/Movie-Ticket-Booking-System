@@ -45,3 +45,46 @@ func TestValidateCreateSeatsRejectsEmptyAndDuplicateSeats(t *testing.T) {
 		t.Fatal("expected duplicate seat to be rejected")
 	}
 }
+
+func TestValidateAddMovieRequestAcceptsValidRequest(t *testing.T) {
+	req := models.AddMovieRequest{
+		Title:           "Example Film",
+		Description:     "A valid movie description",
+		DurationMinutes: 120,
+		ReleaseDate:     "2024-02-29",
+	}
+	if err := ValidateAddMovieRequest(req); err != nil {
+		t.Fatalf("expected valid movie request, got error: %v", err)
+	}
+}
+
+func TestValidateCreateSeatsRequestAcceptsMaximumBatch(t *testing.T) {
+	seats := make([]models.CreateSeatRequest, 500)
+	for i := range seats {
+		seats[i] = models.CreateSeatRequest{RowLabel: "A", SeatNumber: i + 1}
+	}
+	if err := ValidateCreateSeatsRequest(seats); err != nil {
+		t.Fatalf("expected 500-seat batch to be accepted, got error: %v", err)
+	}
+}
+
+func TestValidateCreateSeatsRequestRejectsBatchOverMaximum(t *testing.T) {
+	seats := make([]models.CreateSeatRequest, 501)
+	for i := range seats {
+		seats[i] = models.CreateSeatRequest{RowLabel: "A", SeatNumber: i + 1}
+	}
+	if err := ValidateCreateSeatsRequest(seats); err == nil {
+		t.Fatal("expected batch larger than 500 seats to be rejected")
+	}
+}
+
+func TestValidateAddShowtimeRequestAcceptsZeroPrice(t *testing.T) {
+	req := models.AddShowtimeRequest{
+		AuditoriumID: uuid.New(),
+		StartsAt:     time.Now().Add(time.Hour),
+		PriceCents:   0,
+	}
+	if err := ValidateAddShowtimeRequest(req); err != nil {
+		t.Fatalf("expected zero-price showtime to be accepted, got error: %v", err)
+	}
+}

@@ -24,3 +24,23 @@ func TestValidateCreateHoldRequestRejectsInvalidBatches(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateCreateHoldRequestAcceptsMaximumBatch(t *testing.T) {
+	seatIDs := make([]uuid.UUID, 500)
+	for i := range seatIDs {
+		seatIDs[i] = uuid.New()
+	}
+	if err := ValidateCreateHoldRequest(models.CreateHoldRequest{SeatIDs: seatIDs}); err != nil {
+		t.Fatalf("expected 500-seat hold request to be accepted, got error: %v", err)
+	}
+}
+
+func TestValidateCreateHoldRequestRejectsBatchOverMaximum(t *testing.T) {
+	seatIDs := make([]uuid.UUID, 501)
+	for i := range seatIDs {
+		seatIDs[i] = uuid.New()
+	}
+	if err := ValidateCreateHoldRequest(models.CreateHoldRequest{SeatIDs: seatIDs}); err == nil {
+		t.Fatal("expected hold request over 500 seats to be rejected")
+	}
+}

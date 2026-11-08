@@ -38,3 +38,43 @@ func TestValidateLoginRequestRejectsInvalidInput(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateRegisterRequestAcceptsValidInput(t *testing.T) {
+	req := models.RegisterRequest{
+		Name:     "Alice Example",
+		Email:    "alice@example.com",
+		Password: "correct-horse-123",
+	}
+	if err := ValidateRegisterRequest(req); err != nil {
+		t.Fatalf("expected valid registration request, got error: %v", err)
+	}
+}
+
+func TestValidateRegisterRequestAcceptsMaximumPasswordLength(t *testing.T) {
+	req := models.RegisterRequest{
+		Name:     "Alice",
+		Email:    "alice@example.com",
+		Password: "12345678901234567890123456789012",
+	}
+	if err := ValidateRegisterRequest(req); err != nil {
+		t.Fatalf("expected 32-character password to be accepted, got error: %v", err)
+	}
+}
+
+func TestValidateRegisterRequestRejectsNameOverMaximum(t *testing.T) {
+	req := models.RegisterRequest{
+		Name:     "123456789012345678901234567890123456789012345678901",
+		Email:    "alice@example.com",
+		Password: "password123",
+	}
+	if err := ValidateRegisterRequest(req); err == nil {
+		t.Fatal("expected name longer than 50 characters to be rejected")
+	}
+}
+
+func TestValidateLoginRequestAcceptsValidInput(t *testing.T) {
+	req := models.LoginRequest{Email: "alice@example.com", Password: "password123"}
+	if err := ValidateLoginRequest(req); err != nil {
+		t.Fatalf("expected valid login request, got error: %v", err)
+	}
+}
