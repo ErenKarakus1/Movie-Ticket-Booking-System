@@ -16,3 +16,13 @@ func UserMiddleware() gin.HandlerFunc {
 		ctx.Next()
 	}
 }
+
+func AdminMiddleware() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		if ctx.GetHeader("X-User-Role") != "admin" {
+			ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
+		ctx.Next()
+	}
+}

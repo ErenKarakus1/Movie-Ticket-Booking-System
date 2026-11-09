@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS bookings (
     hold_id UUID NOT NULL UNIQUE,
     user_id UUID NOT NULL,
     showtime_id UUID NOT NULL,
+    status TEXT NOT NULL DEFAULT 'not_checked' CHECK (status IN ('not_checked', 'checked')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -12,8 +13,6 @@ CREATE TABLE IF NOT EXISTS booking_seats (
     seat_id UUID NOT NULL,
     price_cents INT NOT NULL,
     PRIMARY KEY (booking_id, seat_id),
-    CHECK (price_cents >= 0)
+    CHECK (price_cents >= 0),
+    UNIQUE (showtime_id, seat_id)
 );
-
-CREATE UNIQUE INDEX IF NOT EXISTS booking_seats_showtime_seat_unique
-    ON booking_seats (showtime_id, seat_id);

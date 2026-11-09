@@ -243,6 +243,32 @@ func GetBookingHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 	}
 }
 
+func RedeemBookingHandler(pool *pgxpool.Pool) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		bookingID, err := uuid.Parse(ctx.Param("id"))
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid booking id"})
+			return
+		}
+
+		err = services.RedeemBooking(ctx.Request.Context(), pool, bookingID)
+		if err != nil {
+			if errors.Is(err, services.ErrBookingNotFound) {
+				ctx.JSON(http.StatusNotFound, gin.H{"error": "booking not found"})
+				return
+			}
+			if errors.Is(err, services.ErrBookingAlreadyChecked) {
+				ctx.JSON(http.StatusConflict, gin.H{"error": "booking has already been checked"})
+				return
+			}
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+
+		ctx.Status(http.StatusNoContent)
+	}
+}
+
 func GetAllBookingsHandler(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		userID := ctx.GetHeader("X-User-ID")

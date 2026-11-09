@@ -13,6 +13,7 @@ import (
 
 var ErrSeatAlreadyBooked = errors.New("seat already booked")
 var ErrBookingNotFound = errors.New("booking not found")
+var ErrBookingAlreadyChecked = errors.New("booking already checked")
 
 const getBookedSeatIDsByShowtimeSQL = `
 	SELECT seat_id
@@ -29,7 +30,7 @@ const insertBookingSQL = `
 	)
 	VALUES ($1, $2, $3, $4)
 	ON CONFLICT (hold_id) DO NOTHING
-	RETURNING created_at
+	RETURNING status, created_at
 `
 
 const insertBookingSeatSQL = `
@@ -48,6 +49,7 @@ const getBookingByHoldIDSQL = `
 		hold_id, 
 		user_id, 
 		showtime_id, 
+		status,
 		created_at
 	FROM bookings
 	WHERE hold_id = $1
@@ -57,6 +59,7 @@ const getBookingByIDSQL = `
 	SELECT 
 		id, 
 		showtime_id, 
+		status,
 		created_at
 	FROM bookings
 	WHERE id = $1
@@ -75,10 +78,24 @@ const getAllBookingsByUserIDSQL = `
 	SELECT 
 		id, 
 		showtime_id, 
+		status,
 		created_at
 	FROM bookings
 	WHERE user_id=$1
 	ORDER BY created_at DESC
+`
+
+const redeemBookingSQL = `
+	UPDATE bookings
+	SET status = 'checked'
+	WHERE id = $1 AND status = 'not_checked'
+	RETURNING id
+`
+
+const getBookingStatusSQL = `
+	SELECT status
+	FROM bookings
+	WHERE id = $1
 `
 
 func GetBookedSeatIDsByShowtime(ctx context.Context, pool *pgxpool.Pool, showtimeID uuid.UUID) ([]uuid.UUID, error) {
@@ -109,6 +126,7 @@ func GetBookingByHoldID(ctx context.Context, pool *pgxpool.Pool, holdID uuid.UUI
 		&booking.HoldID,
 		&booking.UserID,
 		&booking.ShowtimeID,
+		&booking.Status,
 		&booking.CreatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -132,13 +150,14 @@ func InsertBooking(ctx context.Context, pool *pgxpool.Pool, booking *models.Book
 		booking.HoldID,
 		booking.UserID,
 		booking.ShowtimeID,
-	).Scan(&booking.CreatedAt)
+	).Scan(&booking.Status, &booking.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = tx.QueryRow(ctx, getBookingByHoldIDSQL, booking.HoldID).Scan(
 			&booking.ID,
 			&booking.HoldID,
 			&booking.UserID,
 			&booking.ShowtimeID,
+			&booking.Status,
 			&booking.CreatedAt,
 		)
 		if err != nil {
@@ -185,6 +204,7 @@ func GetBooking(ctx context.Context, pool *pgxpool.Pool, bookingID uuid.UUID, us
 	).Scan(
 		&resp.ID,
 		&resp.ShowtimeID,
+		&resp.Status,
 		&resp.CreatedAt,
 	)
 
@@ -244,6 +264,7 @@ func GetAllBookings(ctx context.Context, pool *pgxpool.Pool, userID uuid.UUID) (
 		err := bookingRows.Scan(
 			&booking.ID,
 			&booking.ShowtimeID,
+			&booking.Status,
 			&booking.CreatedAt,
 		)
 		if err != nil {
@@ -287,4 +308,28 @@ func GetAllBookings(ctx context.Context, pool *pgxpool.Pool, userID uuid.UUID) (
 	}
 
 	return bookings, nil
+}
+
+func RedeemBooking(ctx context.Context, pool *pgxpool.Pool, bookingID uuid.UUID) error {
+	var updatedID uuid.UUID
+	err := pool.QueryRow(ctx, redeemBookingSQL, bookingID).Scan(&updatedID)
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return errors.New("internal server error")
+	}
+
+	var status string
+	err = pool.QueryRow(ctx, getBookingStatusSQL, bookingID).Scan(&status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrBookingNotFound
+	}
+	if err != nil {
+		return errors.New("internal server error")
+	}
+	if status == "checked" {
+		return ErrBookingAlreadyChecked
+	}
+	return errors.New("internal server error")
 }

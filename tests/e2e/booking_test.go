@@ -328,13 +328,29 @@ func TestBookingFlowAndRejectedRequests(t *testing.T) {
 	booking := request(http.MethodPost, "/holds/"+holdData.HoldID+"/confirm", winner.token, nil)
 	assertStatus(booking, http.StatusCreated, "confirm test booking")
 	var bookingData struct {
-		ID string `json:"id"`
+		ID     string `json:"id"`
+		Status string `json:"status"`
 	}
 	decode(booking.body, &bookingData)
 	if bookingData.ID == "" {
 		t.Fatalf("booking response has no id: %s", booking.body)
 	}
 	bookingID = bookingData.ID
+	if bookingData.Status != "not_checked" {
+		t.Fatalf("new booking status = %q, want %q", bookingData.Status, "not_checked")
+	}
 	assertSeatStatus(showtimeData.ID, seatID, "booked")
 	assertStatus(request(http.MethodGet, "/bookings/"+bookingData.ID, winner.token, nil), http.StatusOK, "get confirmed booking")
+	assertStatus(request(http.MethodPost, "/bookings/"+bookingData.ID+"/redeem", winner.token, nil), http.StatusForbidden, "deny user booking redemption")
+	assertStatus(request(http.MethodPost, "/bookings/"+bookingData.ID+"/redeem", loginBody.Token, nil), http.StatusNoContent, "admin redeems booking")
+	assertStatus(request(http.MethodPost, "/bookings/"+bookingData.ID+"/redeem", loginBody.Token, nil), http.StatusConflict, "reject duplicate booking redemption")
+	var redeemedBooking struct {
+		Status string `json:"status"`
+	}
+	redeemed := request(http.MethodGet, "/bookings/"+bookingData.ID, winner.token, nil)
+	assertStatus(redeemed, http.StatusOK, "get redeemed booking")
+	decode(redeemed.body, &redeemedBooking)
+	if redeemedBooking.Status != "checked" {
+		t.Fatalf("redeemed booking status = %q, want %q", redeemedBooking.Status, "checked")
+	}
 }

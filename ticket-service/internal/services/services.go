@@ -22,12 +22,18 @@ var ErrHoldExpiredOrMissing = errors.New("hold is missing or expired")
 var ErrHoldDoesntBelongToUser = errors.New("hold belongs to another user")
 var ErrInvalidHoldDetails = errors.New("invalid hold details")
 var ErrSeatAlreadyBooked = repository.ErrSeatAlreadyBooked
+var ErrBookingNotFound = repository.ErrBookingNotFound
+var ErrBookingAlreadyChecked = repository.ErrBookingAlreadyChecked
 
 const (
 	SeatStatusAvailable = "available"
 	SeatStatusHeld      = "held"
 	SeatStatusBooked    = "booked"
 )
+
+func RedeemBooking(ctx context.Context, pool *pgxpool.Pool, bookingID uuid.UUID) error {
+	return repository.RedeemBooking(ctx, pool, bookingID)
+}
 
 func GetShowtimeSeats(ctx context.Context, client *redis.Client, movies *movieclient.Client, pool *pgxpool.Pool, showtimeID uuid.UUID) ([]models.ShowtimeSeat, error) {
 	seats, err := movies.GetShowtimeSeats(ctx, showtimeID)

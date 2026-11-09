@@ -48,6 +48,7 @@ func main() {
 	protected.DELETE("/holds/:id", ticketProxy)
 	protected.POST("/holds/:id/confirm", ticketProxy)
 	protected.GET("/bookings/:id", ticketProxy)
+	protected.POST("/bookings/:id/redeem", ticketProxy)
 	protected.GET("/users/me/bookings", ticketProxy)
 
 	if err := router.Run(":8080"); err != nil {

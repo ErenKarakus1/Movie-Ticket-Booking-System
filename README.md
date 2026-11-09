@@ -105,7 +105,7 @@ movie-ticket-booking-system/
 | `api-gateway` | `8080` | Client entry point, JWT validation, routing, and rate limiting |
 | `auth-service` | `8081` | Registration, login, password hashing, and JWT creation |
 | `movie-service` | `8082` | Movies, auditoriums, showtimes, and seats |
-| `ticket-service` | `8083` | Seat holds, booking confirmation, and booking lookup |
+| `ticket-service` | `8083` | Seat holds, booking confirmation, lookup, and admin ticket redemption |
 
 ## Services
 
@@ -137,6 +137,7 @@ Responsible for:
 * Seat availability status (`available`, `held`, or `booked`)
 * Booking confirmation in a PostgreSQL transaction
 * Booking and booked-seat lookup
+* Admin-only ticket check-in, with booking status changing from `not_checked` to `checked`
 * Per-seat price snapshots at confirmation time
 
 ### API Gateway
@@ -321,6 +322,7 @@ All client requests should go through `http://localhost:8080`.
 | `DELETE` | `/holds/:id` | Release a hold |
 | `POST` | `/holds/:id/confirm` | Confirm a hold and create a booking |
 | `GET` | `/bookings/:id` | Get one of the authenticated user's bookings |
+| `POST` | `/bookings/:id/redeem` | Admin-only ticket check-in; changes status from `not_checked` to `checked` |
 | `GET` | `/users/me/bookings` | List the authenticated user's bookings |
 
 To create a hold, send seat IDs:
@@ -368,7 +370,7 @@ go -C api-gateway test ./...
 
 The unit tests cover invalid registration, login, movie, showtime, seat, and hold inputs, plus gateway JWT rejection and trusted identity-header behavior.
 
-The opt-in end-to-end test creates temporary admin and user accounts, then creates a movie, auditorium, seat, and showtime through the gateway. It checks rejected registration and login requests, unauthenticated admin access, an invalid movie ID, and an overlapping showtime. It also races two users to hold the same seat and verifies that exactly one succeeds, then checks the hold, booking confirmation, seat status, and booking lookup flow.
+The opt-in end-to-end test creates temporary admin and user accounts, then creates a movie, auditorium, seat, and showtime through the gateway. It checks rejected registration and login requests, unauthenticated admin access, an invalid movie ID, and an overlapping showtime. It also races two users to hold the same seat and verifies that exactly one succeeds, then checks the hold, booking confirmation, seat status, and booking lookup flow. Finally, it verifies that users cannot redeem tickets, admins can redeem a booking once, repeated redemption is rejected, and the booking status changes from `not_checked` to `checked`.
 
 Start PostgreSQL, Redis, and all four services, then run the E2E test with a disposable PostgreSQL database that has all migrations applied:
 

@@ -22,6 +22,7 @@ type Booking struct {
 	HoldID     uuid.UUID `json:"hold_id"`
 	UserID     uuid.UUID `json:"user_id"`
 	ShowtimeID uuid.UUID `json:"showtime_id"`
+	Status     string    `json:"status"`
 	CreatedAt  time.Time `json:"created_at"`
 }
 
@@ -40,6 +41,7 @@ type GetBookingSeatResponse struct {
 type GetBookingResponse struct {
 	ID         uuid.UUID                `json:"id"`
 	ShowtimeID uuid.UUID                `json:"showtime_id"`
+	Status     string                   `json:"status"`
 	CreatedAt  time.Time                `json:"created_at"`
 	Seats      []GetBookingSeatResponse `json:"seats"`
 }
