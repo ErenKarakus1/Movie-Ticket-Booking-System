@@ -40,6 +40,7 @@ The gateway validates JWTs on protected routes and forwards the authenticated us
 ```mermaid
 sequenceDiagram
     actor User
+    actor Admin
     participant Gateway
     participant Ticket as Ticket Service
     participant Movie as Movie Service
@@ -61,6 +62,11 @@ sequenceDiagram
     Ticket->>DB: Insert booking and booking seats in a transaction
     Ticket->>Redis: Release hold keys
     Ticket-->>User: Confirmed booking
+
+    Admin->>Gateway: POST /bookings/:id/redeem
+    Gateway->>Ticket: Forward authenticated admin request
+    Ticket->>DB: Change status from not_checked to checked
+    Ticket-->>Admin: Redemption result
 ```
 
 Seat holds expire after up to five minutes, capped at the showtime start. Redis Lua scripts reserve and release a batch atomically. PostgreSQL stores confirmed bookings and enforces uniqueness for `(showtime_id, seat_id)` pairs.
@@ -313,6 +319,7 @@ All client requests should go through `http://localhost:8080`.
 | `POST` | `/auditoriums` | Create an auditorium |
 | `POST` | `/movies/:id/showtimes` | Schedule a showtime |
 | `POST` | `/auditoriums/:id/seats` | Add auditorium seats in a batch |
+| `POST` | `/bookings/:id/redeem` | Check in a ticket; changes status from `not_checked` to `checked` |
 
 ### Protected user endpoints
 
@@ -322,7 +329,6 @@ All client requests should go through `http://localhost:8080`.
 | `DELETE` | `/holds/:id` | Release a hold |
 | `POST` | `/holds/:id/confirm` | Confirm a hold and create a booking |
 | `GET` | `/bookings/:id` | Get one of the authenticated user's bookings |
-| `POST` | `/bookings/:id/redeem` | Admin-only ticket check-in; changes status from `not_checked` to `checked` |
 | `GET` | `/users/me/bookings` | List the authenticated user's bookings |
 
 To create a hold, send seat IDs:
@@ -368,7 +374,7 @@ go -C ticket-service test ./...
 go -C api-gateway test ./...
 ```
 
-The unit tests cover invalid registration, login, movie, showtime, seat, and hold inputs, plus gateway JWT rejection and trusted identity-header behavior.
+The unit tests cover registration and login validation, password hashing, JWT generation and validation, movie and ticket validation, movie service object generation, user/admin middleware, and gateway JWT rejection and trusted identity-header behavior.
 
 The opt-in end-to-end test creates temporary admin and user accounts, then creates a movie, auditorium, seat, and showtime through the gateway. It checks rejected registration and login requests, unauthenticated admin access, an invalid movie ID, and an overlapping showtime. It also races two users to hold the same seat and verifies that exactly one succeeds, then checks the hold, booking confirmation, seat status, and booking lookup flow. Finally, it verifies that users cannot redeem tickets, admins can redeem a booking once, repeated redemption is rejected, and the booking status changes from `not_checked` to `checked`.
 

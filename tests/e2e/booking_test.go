@@ -109,8 +109,12 @@ func TestBookingFlowAndRejectedRequests(t *testing.T) {
 	var testUserIDs []string
 	var seatIDs []string
 	var holdID, userToken string
+	var secondHoldID, secondUserToken string
 	t.Cleanup(func() {
 		ctx := context.Background()
+		if secondHoldID != "" {
+			request(http.MethodDelete, "/holds/"+secondHoldID, secondUserToken, nil)
+		}
 		if holdID != "" {
 			request(http.MethodDelete, "/holds/"+holdID, userToken, nil)
 		}
@@ -340,6 +344,22 @@ func TestBookingFlowAndRejectedRequests(t *testing.T) {
 		t.Fatalf("new booking status = %q, want %q", bookingData.Status, "not_checked")
 	}
 	assertSeatStatus(showtimeData.ID, seatID, "booked")
+
+	otherUserToken := secondLoginBody.Token
+	if otherUserToken == winner.token {
+		otherUserToken = userLoginBody.Token
+	}
+	secondUserToken = otherUserToken
+	duplicateHold := request(http.MethodPost, "/showtimes/"+showtimeData.ID+"/holds", otherUserToken, map[string][]string{"seat_ids": {seatID}})
+	assertStatus(duplicateHold, http.StatusCreated, "hold seat that is already booked")
+	var duplicateHoldData struct {
+		HoldID string `json:"hold_id"`
+	}
+	decode(duplicateHold.body, &duplicateHoldData)
+	secondHoldID = duplicateHoldData.HoldID
+	duplicateBooking := request(http.MethodPost, "/holds/"+duplicateHoldData.HoldID+"/confirm", otherUserToken, nil)
+	assertStatus(duplicateBooking, http.StatusConflict, "reject duplicate booking for showtime seat")
+
 	assertStatus(request(http.MethodGet, "/bookings/"+bookingData.ID, winner.token, nil), http.StatusOK, "get confirmed booking")
 	assertStatus(request(http.MethodPost, "/bookings/"+bookingData.ID+"/redeem", winner.token, nil), http.StatusForbidden, "deny user booking redemption")
 	assertStatus(request(http.MethodPost, "/bookings/"+bookingData.ID+"/redeem", loginBody.Token, nil), http.StatusNoContent, "admin redeems booking")

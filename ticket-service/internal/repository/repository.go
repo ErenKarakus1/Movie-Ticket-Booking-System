@@ -181,7 +181,7 @@ func InsertBooking(ctx context.Context, pool *pgxpool.Pool, booking *models.Book
 		)
 		if err != nil {
 			var pgErr *pgconn.PgError
-			if errors.As(err, &pgErr) && (pgErr.ConstraintName == "booking_seats_showtime_seat_unique" || pgErr.ConstraintName == "booking_seats_active_showtime_seat_unique") {
+			if errors.As(err, &pgErr) && pgErr.ConstraintName == "booking_seats_showtime_id_seat_id_key" {
 				return false, ErrSeatAlreadyBooked
 			}
 			return false, errors.New("internal server error")
