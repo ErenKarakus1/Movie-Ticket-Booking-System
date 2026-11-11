@@ -15,6 +15,11 @@ var ErrSeatAlreadyBooked = errors.New("seat already booked")
 var ErrBookingNotFound = errors.New("booking not found")
 var ErrBookingAlreadyChecked = errors.New("booking already checked")
 
+func isSeatAlreadyBookedError(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.ConstraintName == "booking_seats_showtime_id_seat_id_key"
+}
+
 const getBookedSeatIDsByShowtimeSQL = `
 	SELECT seat_id
 	FROM booking_seats
@@ -180,8 +185,7 @@ func InsertBooking(ctx context.Context, pool *pgxpool.Pool, booking *models.Book
 			seat.PriceCents,
 		)
 		if err != nil {
-			var pgErr *pgconn.PgError
-			if errors.As(err, &pgErr) && pgErr.ConstraintName == "booking_seats_showtime_id_seat_id_key" {
+			if isSeatAlreadyBookedError(err) {
 				return false, ErrSeatAlreadyBooked
 			}
 			return false, errors.New("internal server error")
