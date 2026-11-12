@@ -26,6 +26,7 @@ flowchart LR
     Gateway --> Auth
     Gateway --> Movie
     Gateway --> Ticket
+    Gateway -->|Rate limiting| Redis
     Auth --> AuthDB
     Movie --> MovieDB
     Ticket --> TicketDB
@@ -229,6 +230,14 @@ psql "$DATABASE_URL" -f ticket-service/migrations/001_init.sql
 
 For a simple local setup, the same database URL can be used by all three services. Their migrations create separate tables. You can point the services at separate databases by setting each `DATABASE_URL` independently.
 
+The ticket migration creates the current booking schema for a fresh database. If `bookings` already exists from an earlier schema without the `status` column, `CREATE TABLE IF NOT EXISTS` will not add it. Apply this once to that database, or recreate a disposable development database before applying the migration:
+
+```sql
+ALTER TABLE bookings
+    ADD COLUMN status TEXT NOT NULL DEFAULT 'not_checked'
+    CHECK (status IN ('not_checked', 'checked'));
+```
+
 ### 3. Configure environment variables
 
 Copy each `.env.example` to `.env` in the corresponding service directory, then replace the placeholders. Each service loads `.env` from its current working directory.
@@ -374,9 +383,9 @@ go -C ticket-service test ./...
 go -C api-gateway test ./...
 ```
 
-The unit tests cover registration and login validation, password hashing, JWT generation and validation, movie and ticket validation, movie service object generation, user/admin middleware, and gateway JWT rejection and trusted identity-header behavior.
+The unit tests cover registration and login validation, password hashing, JWT generation and validation, movie and ticket validation, movie service object generation, repository handling of the generated PostgreSQL seat constraint, user/admin middleware, and gateway JWT rejection and trusted identity-header behavior.
 
-The opt-in end-to-end test creates temporary admin and user accounts, then creates a movie, auditorium, seat, and showtime through the gateway. It checks rejected registration and login requests, unauthenticated admin access, an invalid movie ID, and an overlapping showtime. It also races two users to hold the same seat and verifies that exactly one succeeds, then checks the hold, booking confirmation, seat status, and booking lookup flow. Finally, it verifies that users cannot redeem tickets, admins can redeem a booking once, repeated redemption is rejected, and the booking status changes from `not_checked` to `checked`.
+The opt-in end-to-end test creates temporary admin and user accounts, then creates a movie, auditorium, seat, and showtime through the gateway. It checks rejected registration and login requests, unauthenticated admin access, an invalid movie ID, and an overlapping showtime. It races two users to hold the same seat and verifies that exactly one succeeds, then checks the hold and booking confirmation. A second confirmation for that already-booked seat must return `409 Conflict`. The test also checks seat status and booking lookup, then verifies that users cannot redeem tickets, admins can redeem a booking once, repeated redemption is rejected, and the booking status changes from `not_checked` to `checked`.
 
 Start PostgreSQL, Redis, and all four services, then run the E2E test with a disposable PostgreSQL database that has all migrations applied:
 
