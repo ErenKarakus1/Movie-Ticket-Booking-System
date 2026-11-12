@@ -230,14 +230,6 @@ psql "$DATABASE_URL" -f ticket-service/migrations/001_init.sql
 
 For a simple local setup, the same database URL can be used by all three services. Their migrations create separate tables. You can point the services at separate databases by setting each `DATABASE_URL` independently.
 
-The ticket migration creates the current booking schema for a fresh database. If `bookings` already exists from an earlier schema without the `status` column, `CREATE TABLE IF NOT EXISTS` will not add it. Apply this once to that database, or recreate a disposable development database before applying the migration:
-
-```sql
-ALTER TABLE bookings
-    ADD COLUMN status TEXT NOT NULL DEFAULT 'not_checked'
-    CHECK (status IN ('not_checked', 'checked'));
-```
-
 ### 3. Configure environment variables
 
 Copy each `.env.example` to `.env` in the corresponding service directory, then replace the placeholders. Each service loads `.env` from its current working directory.
