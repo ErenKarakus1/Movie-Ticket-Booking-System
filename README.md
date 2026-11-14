@@ -6,7 +6,7 @@
 ![Redis](https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white)
 ![JWT](https://img.shields.io/badge/JWT-000000?style=for-the-badge&logo=jsonwebtokens&logoColor=white)
 
-A movie ticket booking backend built as independent Go microservices behind a single API gateway. Users browse movies and showtimes, temporarily hold seats, and confirm bookings. Administrators manage movies, auditoriums, showtimes, and auditorium seats.
+A movie ticket booking backend built with independent Go microservices behind a single API gateway. Users can browse movies and showtimes, temporarily hold seats, and confirm bookings. Administrators can manage movies, auditoriums, showtimes, and auditorium seats, then check tickets in at the theater.
 
 ## Architecture
 
