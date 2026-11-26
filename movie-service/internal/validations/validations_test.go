@@ -97,6 +97,32 @@ func TestValidateAddMovieRequestAcceptsValidRequest(t *testing.T) {
 	}
 }
 
+func TestValidateAddMovieRequestDurationBoundaries(t *testing.T) {
+	tests := []struct {
+		name     string
+		duration int
+		wantErr  bool
+	}{
+		{name: "negative", duration: -1, wantErr: true},
+		{name: "zero", duration: 0, wantErr: true},
+		{name: "minimum valid", duration: 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := models.AddMovieRequest{
+				Title:           "Film",
+				Description:     "A description",
+				DurationMinutes: tt.duration,
+				ReleaseDate:     "2020-01-01",
+			}
+			err := ValidateAddMovieRequest(req)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("ValidateAddMovieRequest() error = %v, wantErr %t", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestValidateCreateSeatsRequestAcceptsMaximumBatch(t *testing.T) {
 	seats := make([]models.CreateSeatRequest, 500)
 	for i := range seats {
