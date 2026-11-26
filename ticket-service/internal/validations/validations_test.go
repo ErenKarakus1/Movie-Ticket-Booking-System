@@ -25,6 +25,13 @@ func TestValidateCreateHoldRequestRejectsInvalidBatches(t *testing.T) {
 	}
 }
 
+func TestValidateCreateHoldRequestRejectsEmptyNonNilSlice(t *testing.T) {
+	req := models.CreateHoldRequest{SeatIDs: []uuid.UUID{}}
+	if err := ValidateCreateHoldRequest(req); err == nil {
+		t.Fatal("expected validation error for empty seat ID list")
+	}
+}
+
 func TestValidateCreateHoldRequestRejectsNonAdjacentDuplicateSeat(t *testing.T) {
 	a, b, c := uuid.New(), uuid.New(), uuid.New()
 	tests := []struct {
